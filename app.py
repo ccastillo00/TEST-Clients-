@@ -284,16 +284,16 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
             justify-content: flex-start;
             padding: 0.65rem 0.85rem;
             border-radius: 0.45rem;
-            color: #2f343d;
+            color: rgba(250, 250, 250, 0.88);
             background: transparent;
             font-weight: 600;
-            border: 1px solid transparent;
+            border: 1px solid rgba(250, 250, 250, 0.10);
             box-shadow: none;
         }
         section[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
-            background: #f3f5f8;
-            color: #111827;
-            border-color: transparent;
+            background: rgba(250, 250, 250, 0.10);
+            color: #ffffff;
+            border-color: rgba(250, 250, 250, 0.18);
         }
         section[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
             background: #ef5b5b;
@@ -305,6 +305,20 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
             background: #e14e4e;
             color: white;
             border-color: #e14e4e;
+        }
+        @media (prefers-color-scheme: light) {
+            section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
+                color: #2f343d;
+                border-color: rgba(47, 52, 61, 0.08);
+            }
+            section[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
+                background: #f3f5f8;
+                color: #111827;
+                border-color: rgba(47, 52, 61, 0.12);
+            }
+            section[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
+                color: #ffffff;
+            }
         }
         </style>
         """,
