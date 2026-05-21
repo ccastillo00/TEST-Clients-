@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
+from urllib.parse import quote
 
 import pandas as pd
 import plotly.express as px
@@ -249,12 +250,46 @@ def build_call_center_staffing_model(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
+    raw_dashboard = st.query_params.get("dashboard", dashboard_options[0])
+    if isinstance(raw_dashboard, list):
+        raw_dashboard = raw_dashboard[0] if raw_dashboard else dashboard_options[0]
+    selected_dashboard = raw_dashboard if raw_dashboard in dashboard_options else dashboard_options[0]
+
     st.sidebar.title("Workforce Dashboards")
-    selected_dashboard = st.sidebar.radio(
-        "Dashboard",
-        dashboard_options,
-        label_visibility="collapsed",
+    st.sidebar.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"] a.dashboard-nav {
+            display: block;
+            padding: 0.65rem 0.85rem;
+            margin: 0.18rem 0;
+            border-radius: 0.45rem;
+            color: #2f343d;
+            text-decoration: none;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+        section[data-testid="stSidebar"] a.dashboard-nav:hover {
+            background: #f3f5f8;
+            color: #111827;
+            text-decoration: none;
+        }
+        section[data-testid="stSidebar"] a.dashboard-nav.active {
+            background: #ef5b5b;
+            color: white;
+            border-color: #ef5b5b;
+            box-shadow: 0 6px 18px rgba(239, 91, 91, 0.18);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
+    for option in dashboard_options:
+        active_class = " active" if option == selected_dashboard else ""
+        st.sidebar.markdown(
+            f'<a class="dashboard-nav{active_class}" href="?dashboard={quote(option)}">{option}</a>',
+            unsafe_allow_html=True,
+        )
 
     st.sidebar.divider()
     st.sidebar.subheader("Settings")
@@ -511,8 +546,11 @@ def render_recruiter_performance(df: pd.DataFrame) -> None:
 
     chart_col, table_col = st.columns([1.15, 1])
     with chart_col:
+        funnel_by_recruiter = df.groupby("Recruiter", as_index=False)[
+            ["Candidates", "Interviews", "Offers", "Hires"]
+        ].sum()
         fig = px.bar(
-            df,
+            funnel_by_recruiter,
             x="Recruiter",
             y=["Candidates", "Interviews", "Offers", "Hires"],
             barmode="group",
@@ -521,14 +559,24 @@ def render_recruiter_performance(df: pd.DataFrame) -> None:
         fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
         st.plotly_chart(fig, width="stretch")
     with table_col:
+        quality_by_recruiter = (
+            df.groupby("Recruiter", as_index=False)
+            .agg(
+                Avg_Days_To_Hire=("Avg_Days_To_Hire", "mean"),
+                Quality_Score=("Quality_Score", "mean"),
+                Hires=("Hires", "sum"),
+                Candidates=("Candidates", "sum"),
+            )
+            .sort_values("Recruiter")
+        )
         fig = px.scatter(
-            df,
+            quality_by_recruiter,
             x="Avg_Days_To_Hire",
             y="Quality_Score",
             size="Hires",
-            color="City",
-            hover_data=["Recruiter", "Tenant", "Industry", "Product"],
-            title="Quality vs speed by city",
+            color="Recruiter",
+            hover_data=["Candidates"],
+            title="Quality vs speed by recruiter",
         )
         fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
         st.plotly_chart(fig, width="stretch")
@@ -585,8 +633,9 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
 
     chart_col, table_col = st.columns([1, 1])
     with chart_col:
+        call_volume_by_team = df.groupby("Team", as_index=False)[["Answered", "Missed"]].sum()
         fig = px.bar(
-            df,
+            call_volume_by_team,
             x="Team",
             y=["Answered", "Missed"],
             barmode="stack",
@@ -595,8 +644,9 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
         fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
         st.plotly_chart(fig, width="stretch")
     with table_col:
+        service_by_team = df.groupby("Team", as_index=False)[["SLA", "CSAT"]].mean()
         fig = px.line(
-            df,
+            service_by_team,
             x="Team",
             y=["SLA", "CSAT"],
             markers=True,
@@ -734,8 +784,22 @@ def render_sales_performance(df: pd.DataFrame) -> None:
 
     chart_col, table_col = st.columns([1.1, 1])
     with chart_col:
+        sales_by_rep = (
+            df.groupby("Rep", as_index=False)
+            .agg(
+                Pipeline=("Pipeline", "sum"),
+                Closed_Won=("Closed_Won", "sum"),
+                Forecast=("Forecast", "sum"),
+                Deals_Won=("Deals_Won", "sum"),
+                Win_Rate=("Win_Rate", "mean"),
+            )
+            .sort_values("Rep")
+        )
+        sales_by_rep["Avg_Deal_Size"] = sales_by_rep["Closed_Won"] / sales_by_rep[
+            "Deals_Won"
+        ].clip(lower=1)
         fig = px.bar(
-            df,
+            sales_by_rep,
             x="Rep",
             y=["Pipeline", "Closed_Won", "Forecast"],
             barmode="group",
@@ -745,13 +809,12 @@ def render_sales_performance(df: pd.DataFrame) -> None:
         st.plotly_chart(fig, width="stretch")
     with table_col:
         fig = px.scatter(
-            df,
+            sales_by_rep,
             x="Win_Rate",
             y="Avg_Deal_Size",
             size="Deals_Won",
             color="Rep",
             title="Win rate vs average ticket",
-            hover_data=["City", "Tenant", "Industry", "Product"],
             labels={"Win_Rate": "Win rate", "Avg_Deal_Size": "Average deal size"},
         )
         fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
@@ -794,7 +857,21 @@ def render_marketing_performance(df: pd.DataFrame) -> None:
 
     chart_col, table_col = st.columns([1, 1])
     with chart_col:
-        funnel = df.melt(
+        marketing_by_channel = (
+            df.groupby("Channel", as_index=False)
+            .agg(
+                Spend=("Spend", "sum"),
+                Leads=("Leads", "sum"),
+                MQL=("MQL", "sum"),
+                SQL=("SQL", "sum"),
+                Revenue=("Revenue", "sum"),
+            )
+            .sort_values("Channel")
+        )
+        marketing_by_channel["CAC"] = marketing_by_channel["Spend"] / marketing_by_channel[
+            "SQL"
+        ].clip(lower=1)
+        funnel = marketing_by_channel.melt(
             id_vars="Channel",
             value_vars=["Leads", "MQL", "SQL"],
             var_name="Stage",
@@ -812,12 +889,11 @@ def render_marketing_performance(df: pd.DataFrame) -> None:
         st.plotly_chart(fig, width="stretch")
     with table_col:
         fig = px.scatter(
-            df,
+            marketing_by_channel,
             x="Spend",
             y="Revenue",
             size="MQL",
             color="Channel",
-            hover_data=["City", "Tenant", "Industry", "Product"],
             title="Spend vs revenue",
         )
         fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
