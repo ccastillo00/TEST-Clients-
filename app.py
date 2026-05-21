@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pandas as pd
@@ -52,6 +53,7 @@ LEAD_FIELDS = [
 DIMENSION_COLUMNS = ["City", "Tenant", "Industry", "Product"]
 LOGIN_USER = "camilo.cast"
 LOGIN_PASSWORD = "123456"
+COMPANY_GROWTH_TARGET = 0.80
 
 
 def get_secret(name: str, default: str = "") -> str:
@@ -185,6 +187,65 @@ def plot_bar(
     fig = px.bar(df, x=x, y=y, color=color, title=title)
     fig.update_layout(height=height, margin=dict(l=20, r=20, t=50, b=20))
     st.plotly_chart(fig, width="stretch")
+
+
+def min_max_normalize(series: pd.Series) -> pd.Series:
+    numeric = pd.to_numeric(series, errors="coerce").fillna(0)
+    minimum = numeric.min()
+    maximum = numeric.max()
+    if maximum == minimum:
+        return pd.Series([0.5] * len(numeric), index=numeric.index)
+    return (numeric - minimum) / (maximum - minimum)
+
+
+def linear_regression_predict(x: pd.Series, y: pd.Series, target_x: pd.Series) -> pd.Series:
+    x_mean = x.mean()
+    y_mean = y.mean()
+    variance = ((x - x_mean) ** 2).sum()
+    slope = 0 if variance == 0 else ((x - x_mean) * (y - y_mean)).sum() / variance
+    intercept = y_mean - slope * x_mean
+    return intercept + slope * target_x
+
+
+def build_call_center_staffing_model(df: pd.DataFrame) -> pd.DataFrame:
+    city = (
+        df.groupby("City", as_index=False)
+        .agg(
+            Agents=("Agents", "sum"),
+            Calls=("Calls", "sum"),
+            Answered=("Answered", "sum"),
+            Missed=("Missed", "sum"),
+            Avg_Handle_Time=("Avg_Handle_Time", "mean"),
+            SLA=("SLA", "mean"),
+            CSAT=("CSAT", "mean"),
+            Conversions=("Conversions", "sum"),
+        )
+        .sort_values("City")
+    )
+    city["Answer_Rate"] = city["Answered"] / city["Calls"] * 100
+    city["Calls_Per_Agent"] = city["Calls"] / city["Agents"]
+    city["Service_Gap"] = (92 - city["SLA"]).clip(lower=0)
+    city["Growth_Target"] = f"+{int(COMPANY_GROWTH_TARGET * 100)}%"
+
+    city["Calls_Norm"] = min_max_normalize(city["Calls"])
+    city["Missed_Norm"] = min_max_normalize(city["Missed"])
+    city["AHT_Norm"] = min_max_normalize(city["Avg_Handle_Time"])
+    city["Conversions_Norm"] = min_max_normalize(city["Conversions"])
+    city["Service_Gap_Norm"] = min_max_normalize(city["Service_Gap"])
+    city["Workload_Index"] = (
+        city["Calls_Norm"] * 0.40
+        + city["Missed_Norm"] * 0.20
+        + city["AHT_Norm"] * 0.15
+        + city["Conversions_Norm"] * 0.15
+        + city["Service_Gap_Norm"] * 0.10
+    )
+
+    target_workload = (city["Workload_Index"] * (1 + COMPANY_GROWTH_TARGET)).clip(upper=1.8)
+    predicted = linear_regression_predict(city["Workload_Index"], city["Agents"], target_workload)
+    service_buffer = 1 + (city["Service_Gap_Norm"] * 0.18)
+    city["Recommended_Agents"] = (predicted * service_buffer).map(lambda value: max(1, math.ceil(value)))
+    city["Agent_Gap"] = city["Recommended_Agents"] - city["Agents"]
+    return city
 
 
 def render_sidebar() -> bool:
@@ -340,6 +401,7 @@ def render_recruiter_performance(df: pd.DataFrame) -> None:
 
 def render_call_center_performance(df: pd.DataFrame) -> None:
     st.subheader("Call center performance")
+    st.caption("Company growth target: 80% expansion across markets.")
     df = render_dimension_filters(df, "call_center")
     if df.empty:
         st.info("No call center records match the current filters.")
@@ -348,8 +410,12 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
     avg_sla = float(df["SLA"].mean())
     avg_csat = float(df["CSAT"].mean())
     total_conversions = int(df["Conversions"].sum())
+    staffing = build_call_center_staffing_model(df)
+    total_agents = int(staffing["Agents"].sum())
+    recommended_agents = int(staffing["Recommended_Agents"].sum())
+    agent_gap = recommended_agents - total_agents
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         metric_card("Answer rate", percent(answer_rate))
     with col2:
@@ -358,6 +424,16 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
         metric_card("Average CSAT", f"{avg_csat:.1f}/5")
     with col4:
         metric_card("Conversions", f"{total_conversions:,}")
+    with col5:
+        metric_card("Agents now", f"{total_agents:,}")
+
+    target_col1, target_col2, target_col3 = st.columns(3)
+    with target_col1:
+        metric_card("Growth target", "+80%")
+    with target_col2:
+        metric_card("Recommended agents", f"{recommended_agents:,}")
+    with target_col3:
+        metric_card("Agent gap", f"{agent_gap:+,}")
 
     chart_col, table_col = st.columns([1, 1])
     with chart_col:
@@ -383,14 +459,106 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
 
     sub_col1, sub_col2, sub_col3 = st.columns(3)
     with sub_col1:
-        by_city = df.groupby("City", as_index=False)["Calls"].sum()
-        plot_bar(by_city, "City", "Calls", "Call volume by city")
+        by_city = df.groupby("City", as_index=False)[["Calls", "Agents"]].sum()
+        fig = px.bar(
+            by_city,
+            x="City",
+            y=["Calls", "Agents"],
+            barmode="group",
+            title="Call volume and agents by city",
+        )
+        fig.update_layout(height=340, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig, width="stretch")
     with sub_col2:
         by_tenant = df.groupby("Tenant", as_index=False)["Conversions"].sum()
         plot_bar(by_tenant, "Tenant", "Conversions", "Conversions by tenant")
     with sub_col3:
         by_industry = df.groupby("Industry", as_index=False)["CSAT"].mean()
         plot_bar(by_industry, "Industry", "CSAT", "CSAT by industry")
+
+    st.markdown("#### Staffing normalization and regression")
+    model_col1, model_col2 = st.columns([1.1, 1])
+    with model_col1:
+        line_x = pd.Series(
+            [
+                float(staffing["Workload_Index"].min()),
+                float(staffing["Workload_Index"].max()),
+            ]
+        )
+        line_y = linear_regression_predict(
+            staffing["Workload_Index"], staffing["Agents"], line_x
+        )
+        fig = px.scatter(
+            staffing,
+            x="Workload_Index",
+            y="Agents",
+            size="Calls",
+            color="City",
+            hover_data=[
+                "Calls",
+                "Missed",
+                "SLA",
+                "CSAT",
+                "Calls_Per_Agent",
+                "Recommended_Agents",
+                "Agent_Gap",
+            ],
+            title="Regression: normalized workload vs current agents",
+            labels={"Workload_Index": "Normalized workload index", "Agents": "Current agents"},
+        )
+        fig.add_scatter(
+            x=line_x,
+            y=line_y,
+            mode="lines",
+            name="Regression line",
+            line=dict(color="#2f343d", width=3),
+        )
+        fig.update_layout(height=390, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig, width="stretch")
+    with model_col2:
+        comparison = staffing.melt(
+            id_vars="City",
+            value_vars=["Agents", "Recommended_Agents"],
+            var_name="Staffing_Type",
+            value_name="Agent_Count",
+        )
+        fig = px.bar(
+            comparison,
+            x="City",
+            y="Agent_Count",
+            color="Staffing_Type",
+            barmode="group",
+            title="Current vs recommended agents by market",
+        )
+        fig.update_layout(height=390, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig, width="stretch")
+
+    display_columns = [
+        "City",
+        "Agents",
+        "Recommended_Agents",
+        "Agent_Gap",
+        "Calls",
+        "Calls_Per_Agent",
+        "Answer_Rate",
+        "SLA",
+        "CSAT",
+        "Workload_Index",
+        "Growth_Target",
+    ]
+    st.dataframe(
+        staffing[display_columns].style.format(
+            {
+                "Calls_Per_Agent": "{:,.1f}",
+                "Answer_Rate": "{:.1f}%",
+                "SLA": "{:.1f}%",
+                "CSAT": "{:.1f}",
+                "Workload_Index": "{:.2f}",
+            }
+        ),
+        width="stretch",
+        hide_index=True,
+    )
 
     st.dataframe(df, width="stretch", hide_index=True)
 

@@ -10,6 +10,8 @@ It includes:
 - Zoho CRM API v8 module reads.
 - Demo dashboards for recruiter performance, call center performance, sales
   performance, marketing performance, and gross revenue.
+- Call center staffing model with agents by city, normalized KPIs, a simple
+  regression, and an 80% company growth target scenario.
 - Cross-dimensional demo data by city, tenant, industry, and product.
 - Gross revenue subtabs for overview, revenue mix, segments, and detail.
 - Demo mode so the app can be reviewed before Zoho credentials are available.

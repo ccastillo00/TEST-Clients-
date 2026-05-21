@@ -101,10 +101,13 @@ def demo_call_center_performance() -> pd.DataFrame:
         calls = 720 + (index * 137) % 1650
         answered = int(calls * (0.71 + (index % 5) * 0.045))
         answered = min(answered, calls)
+        city_factor = CITIES.index(CITIES[index % len(CITIES)]) + 1
+        agents = 8 + city_factor * 2 + (index % 5) * 3 + int(calls / 420)
         rows.append(
             {
                 **_dimension(index),
                 "Team": teams[index % len(teams)],
+                "Agents": agents,
                 "Calls": calls,
                 "Answered": answered,
                 "Missed": calls - answered,
