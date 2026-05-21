@@ -8,6 +8,9 @@ It includes:
 - Basic login for the demo: `camilo.cast` / `123456`.
 - OAuth connection using a Zoho `refresh_token`.
 - Zoho CRM API v8 module reads.
+- Main growth dashboard showing where the company is today and where it needs
+  to be by year end to hit 80% growth.
+- Sidebar navigation under Workforce Dashboards, with Settings below it.
 - Demo dashboards for recruiter performance, call center performance, sales
   performance, marketing performance, and gross revenue.
 - Call center staffing model with agents by city, normalized KPIs, a simple

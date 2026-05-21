@@ -248,8 +248,16 @@ def build_call_center_staffing_model(df: pd.DataFrame) -> pd.DataFrame:
     return city
 
 
-def render_sidebar() -> bool:
-    st.sidebar.title("Settings")
+def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
+    st.sidebar.title("Workforce Dashboards")
+    selected_dashboard = st.sidebar.radio(
+        "Dashboard",
+        dashboard_options,
+        label_visibility="collapsed",
+    )
+
+    st.sidebar.divider()
+    st.sidebar.subheader("Settings")
     st.sidebar.caption(f"Signed in as {st.session_state.get('username', LOGIN_USER)}")
     use_demo = st.sidebar.toggle(
         "Use demo data",
@@ -263,7 +271,7 @@ def render_sidebar() -> bool:
     if st.sidebar.button("Sign out"):
         st.session_state.clear()
         st.rerun()
-    return use_demo
+    return use_demo, selected_dashboard
 
 
 def render_deals(deals: pd.DataFrame) -> None:
@@ -338,6 +346,146 @@ def render_leads(leads: pd.DataFrame) -> None:
 
     columns = [col for col in LEAD_FIELDS if col in leads.columns]
     st.dataframe(leads[columns], width="stretch", hide_index=True)
+
+
+def render_growth_dashboard(
+    deals: pd.DataFrame,
+    leads: pd.DataFrame,
+    call_center: pd.DataFrame,
+    revenue_monthly: pd.DataFrame,
+) -> None:
+    st.subheader("Company growth dashboard")
+    st.caption("Where we are today vs where we need to be to reach 80% growth by year end.")
+
+    staffing = build_call_center_staffing_model(call_center)
+    gross_revenue = float(revenue_monthly["Gross_Revenue"].sum())
+    target_revenue = gross_revenue * (1 + COMPANY_GROWTH_TARGET)
+    revenue_gap = target_revenue - gross_revenue
+
+    current_agents = int(staffing["Agents"].sum())
+    required_agents = int(staffing["Recommended_Agents"].sum())
+    agent_gap = required_agents - current_agents
+
+    pipeline = float(deals.get("Amount", pd.Series(dtype=float)).sum())
+    target_pipeline = pipeline * (1 + COMPANY_GROWTH_TARGET)
+    pipeline_gap = target_pipeline - pipeline
+
+    current_leads = len(leads)
+    target_leads = math.ceil(current_leads * (1 + COMPANY_GROWTH_TARGET))
+    lead_gap = target_leads - current_leads
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        metric_card("Current gross revenue", money(gross_revenue))
+    with col2:
+        metric_card("Year-end revenue target", money(target_revenue))
+    with col3:
+        metric_card("Revenue gap", money(revenue_gap))
+    with col4:
+        metric_card("Growth target", "+80%")
+
+    gap_col1, gap_col2, gap_col3, gap_col4 = st.columns(4)
+    with gap_col1:
+        metric_card("Current agents", f"{current_agents:,}")
+    with gap_col2:
+        metric_card("Required agents", f"{required_agents:,}")
+    with gap_col3:
+        metric_card("Pipeline gap", money(pipeline_gap))
+    with gap_col4:
+        metric_card("Lead gap", f"{lead_gap:,}")
+
+    progress = pd.DataFrame(
+        [
+            {"Metric": "Gross revenue", "Current": gross_revenue, "Target": target_revenue},
+            {"Metric": "Pipeline", "Current": pipeline, "Target": target_pipeline},
+            {"Metric": "Leads", "Current": current_leads, "Target": target_leads},
+            {"Metric": "Agents", "Current": current_agents, "Target": required_agents},
+        ]
+    )
+    progress["Gap"] = progress["Target"] - progress["Current"]
+    progress["Progress"] = progress["Current"] / progress["Target"] * 100
+
+    chart_col, route_col = st.columns([1.2, 1])
+    with chart_col:
+        progress_chart = progress.melt(
+            id_vars="Metric",
+            value_vars=["Current", "Target"],
+            var_name="Scenario",
+            value_name="Value",
+        )
+        fig = px.bar(
+            progress_chart,
+            x="Metric",
+            y="Value",
+            color="Scenario",
+            barmode="group",
+            title="Current state vs year-end target",
+        )
+        fig.update_layout(height=390, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig, width="stretch")
+
+    with route_col:
+        staffing_by_city = staffing.sort_values("Agent_Gap", ascending=False)
+        fig = px.bar(
+            staffing_by_city,
+            x="City",
+            y="Agent_Gap",
+            color="Workload_Index",
+            title="Hiring gap by market",
+            labels={"Agent_Gap": "Agent gap"},
+        )
+        fig.update_layout(height=390, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig, width="stretch")
+
+    revenue_by_tenant = revenue_monthly.groupby("Tenant", as_index=False)[
+        ["Gross_Revenue", "Net_Revenue"]
+    ].sum()
+    city_revenue = revenue_monthly.groupby("City", as_index=False)["Gross_Revenue"].sum()
+    city_revenue["Target_Revenue"] = city_revenue["Gross_Revenue"] * (1 + COMPANY_GROWTH_TARGET)
+    city_revenue["Revenue_Gap"] = city_revenue["Target_Revenue"] - city_revenue["Gross_Revenue"]
+
+    detail_col1, detail_col2 = st.columns(2)
+    with detail_col1:
+        fig = px.bar(
+            revenue_by_tenant,
+            x="Tenant",
+            y=["Gross_Revenue", "Net_Revenue"],
+            barmode="group",
+            title="Revenue base by tenant",
+        )
+        fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig, width="stretch")
+    with detail_col2:
+        fig = px.scatter(
+            city_revenue,
+            x="Gross_Revenue",
+            y="Revenue_Gap",
+            size="Target_Revenue",
+            color="City",
+            title="Market revenue gap to +80%",
+        )
+        fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig, width="stretch")
+
+    action_plan = staffing[
+        ["City", "Agents", "Recommended_Agents", "Agent_Gap", "Workload_Index"]
+    ].merge(
+        city_revenue[["City", "Gross_Revenue", "Target_Revenue", "Revenue_Gap"]],
+        on="City",
+        how="left",
+    )
+    st.dataframe(
+        action_plan.sort_values(["Agent_Gap", "Revenue_Gap"], ascending=False).style.format(
+            {
+                "Workload_Index": "{:.2f}",
+                "Gross_Revenue": "${:,.0f}",
+                "Target_Revenue": "${:,.0f}",
+                "Revenue_Gap": "${:,.0f}",
+            }
+        ),
+        width="stretch",
+        hide_index=True,
+    )
 
 
 def render_recruiter_performance(df: pd.DataFrame) -> None:
@@ -789,7 +937,17 @@ def main() -> None:
         "Executive view of recruiting, call center, sales, marketing, and revenue performance."
     )
 
-    use_demo = render_sidebar()
+    dashboard_options = [
+        "Main Growth Dashboard",
+        "Recruiter Performance",
+        "Call Center Performance",
+        "Sales Performance",
+        "Marketing Performance",
+        "Gross Revenue",
+        "Zoho Sales",
+        "Zoho Leads",
+    ]
+    use_demo, selected_dashboard = render_sidebar(dashboard_options)
 
     try:
         if use_demo:
@@ -807,46 +965,31 @@ def main() -> None:
         st.exception(exc)
         st.stop()
 
-    if use_demo:
-        (
-            recruiter_tab,
-            call_center_tab,
-            sales_tab,
-            marketing_tab,
-            revenue_tab,
-            zoho_sales_tab,
-            zoho_leads_tab,
-        ) = st.tabs(
-            [
-                "Recruiter Performance",
-                "Call Center Performance",
-                "Sales Performance",
-                "Marketing Performance",
-                "Gross Revenue",
-                "Zoho Sales",
-                "Zoho Leads",
-            ]
-        )
-        with recruiter_tab:
-            render_recruiter_performance(demo_recruiter_performance())
-        with call_center_tab:
-            render_call_center_performance(demo_call_center_performance())
-        with sales_tab:
-            render_sales_performance(demo_sales_performance())
-        with marketing_tab:
-            render_marketing_performance(demo_marketing_performance())
-        with revenue_tab:
-            render_gross_revenue(demo_gross_revenue_monthly(), demo_gross_revenue_segments())
-        with zoho_sales_tab:
-            render_deals(deals)
-        with zoho_leads_tab:
-            render_leads(leads)
+    recruiter_data = demo_recruiter_performance()
+    call_center_data = demo_call_center_performance()
+    sales_data = demo_sales_performance()
+    marketing_data = demo_marketing_performance()
+    revenue_monthly = demo_gross_revenue_monthly()
+    revenue_segments = demo_gross_revenue_segments()
+
+    if selected_dashboard == "Main Growth Dashboard":
+        render_growth_dashboard(deals, leads, call_center_data, revenue_monthly)
+    elif selected_dashboard == "Recruiter Performance":
+        render_recruiter_performance(recruiter_data)
+    elif selected_dashboard == "Call Center Performance":
+        render_call_center_performance(call_center_data)
+    elif selected_dashboard == "Sales Performance":
+        render_sales_performance(sales_data)
+    elif selected_dashboard == "Marketing Performance":
+        render_marketing_performance(marketing_data)
+    elif selected_dashboard == "Gross Revenue":
+        render_gross_revenue(revenue_monthly, revenue_segments)
+    elif selected_dashboard == "Zoho Sales":
+        render_deals(deals)
+    elif selected_dashboard == "Zoho Leads":
+        render_leads(leads)
     else:
-        tab_sales, tab_leads = st.tabs(["Sales", "Leads"])
-        with tab_sales:
-            render_deals(deals)
-        with tab_leads:
-            render_leads(leads)
+        st.info("Select a dashboard from the sidebar.")
 
 
 if __name__ == "__main__":
