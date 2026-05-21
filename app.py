@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from typing import Any
-from urllib.parse import quote
 
 import pandas as pd
 import plotly.express as px
@@ -250,46 +249,56 @@ def build_call_center_staffing_model(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
-    raw_dashboard = st.query_params.get("dashboard", dashboard_options[0])
-    if isinstance(raw_dashboard, list):
-        raw_dashboard = raw_dashboard[0] if raw_dashboard else dashboard_options[0]
-    selected_dashboard = raw_dashboard if raw_dashboard in dashboard_options else dashboard_options[0]
+    if st.session_state.get("selected_dashboard") not in dashboard_options:
+        st.session_state["selected_dashboard"] = dashboard_options[0]
 
     st.sidebar.title("Workforce Dashboards")
     st.sidebar.markdown(
         """
         <style>
-        section[data-testid="stSidebar"] a.dashboard-nav {
-            display: block;
-            padding: 0.65rem 0.85rem;
+        section[data-testid="stSidebar"] div[data-testid="stButton"] {
             margin: 0.18rem 0;
+        }
+        section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
+            width: 100%;
+            justify-content: flex-start;
+            padding: 0.65rem 0.85rem;
             border-radius: 0.45rem;
             color: #2f343d;
-            text-decoration: none;
+            background: transparent;
             font-weight: 600;
             border: 1px solid transparent;
+            box-shadow: none;
         }
-        section[data-testid="stSidebar"] a.dashboard-nav:hover {
+        section[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
             background: #f3f5f8;
             color: #111827;
-            text-decoration: none;
+            border-color: transparent;
         }
-        section[data-testid="stSidebar"] a.dashboard-nav.active {
+        section[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
             background: #ef5b5b;
             color: white;
             border-color: #ef5b5b;
             box-shadow: 0 6px 18px rgba(239, 91, 91, 0.18);
+        }
+        section[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
+            background: #e14e4e;
+            color: white;
+            border-color: #e14e4e;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
     for option in dashboard_options:
-        active_class = " active" if option == selected_dashboard else ""
-        st.sidebar.markdown(
-            f'<a class="dashboard-nav{active_class}" href="?dashboard={quote(option)}">{option}</a>',
-            unsafe_allow_html=True,
-        )
+        selected = option == st.session_state["selected_dashboard"]
+        if st.sidebar.button(
+            option,
+            key=f"nav_{option}",
+            type="primary" if selected else "secondary",
+        ):
+            st.session_state["selected_dashboard"] = option
+            st.rerun()
 
     st.sidebar.divider()
     st.sidebar.subheader("Settings")
@@ -306,7 +315,7 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
     if st.sidebar.button("Sign out"):
         st.session_state.clear()
         st.rerun()
-    return use_demo, selected_dashboard
+    return use_demo, st.session_state["selected_dashboard"]
 
 
 def render_deals(deals: pd.DataFrame) -> None:
