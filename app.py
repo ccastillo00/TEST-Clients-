@@ -53,6 +53,7 @@ LEAD_FIELDS = [
 DIMENSION_COLUMNS = ["City", "Tenant", "Industry", "Product"]
 LOGIN_USER = "camilo.cast"
 LOGIN_PASSWORD = "123456"
+DEMO_AUTH_TOKEN = "camilo-cast-demo"
 COMPANY_GROWTH_TARGET = 0.80
 
 
@@ -130,8 +131,23 @@ def percent(value: float) -> str:
     return f"{value:.1f}%"
 
 
+def query_param(name: str, default: str = "") -> str:
+    value = st.query_params.get(name, default)
+    if isinstance(value, list):
+        return str(value[0]) if value else default
+    return str(value)
+
+
+def set_query_param(name: str, value: str) -> None:
+    st.query_params[name] = value
+
+
 def authenticate_user() -> bool:
     if st.session_state.get("authenticated"):
+        return True
+    if query_param("auth") == DEMO_AUTH_TOKEN:
+        st.session_state["authenticated"] = True
+        st.session_state["username"] = LOGIN_USER
         return True
 
     st.title("Enterprise Dashboard")
@@ -145,6 +161,7 @@ def authenticate_user() -> bool:
         if username == LOGIN_USER and password == LOGIN_PASSWORD:
             st.session_state["authenticated"] = True
             st.session_state["username"] = username
+            set_query_param("auth", DEMO_AUTH_TOKEN)
             st.rerun()
         st.error("Invalid username or password.")
 
@@ -249,7 +266,10 @@ def build_call_center_staffing_model(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
-    if st.session_state.get("selected_dashboard") not in dashboard_options:
+    dashboard_from_url = query_param("dashboard", dashboard_options[0])
+    if dashboard_from_url in dashboard_options:
+        st.session_state["selected_dashboard"] = dashboard_from_url
+    elif st.session_state.get("selected_dashboard") not in dashboard_options:
         st.session_state["selected_dashboard"] = dashboard_options[0]
 
     st.sidebar.title("Workforce Dashboards")
@@ -298,6 +318,7 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
             type="primary" if selected else "secondary",
         ):
             st.session_state["selected_dashboard"] = option
+            set_query_param("dashboard", option)
             st.rerun()
 
     st.sidebar.divider()
@@ -313,6 +334,7 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
         st.cache_data.clear()
         st.rerun()
     if st.sidebar.button("Sign out"):
+        st.query_params.clear()
         st.session_state.clear()
         st.rerun()
     return use_demo, st.session_state["selected_dashboard"]
