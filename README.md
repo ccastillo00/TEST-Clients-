@@ -24,7 +24,7 @@ It includes:
 - Gross revenue subtabs for overview, revenue mix, segments, and detail.
 - External API Insights dashboard combining open APIs for weather, official weather
   alerts, air quality, and public market demographics.
-- Global Notification Center for installation risk, weather alerts, staffing gaps,
+- Global notification dropdown for installation risk, weather alerts, staffing gaps,
   API availability, and growth target blockers.
 - Demo mode so the app can be reviewed before Zoho credentials are available.
 

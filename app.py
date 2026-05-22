@@ -1884,23 +1884,27 @@ def render_notification_center(
         if item["Source"] in {"Open-Meteo Forecast", "National Weather Service", "Open-Meteo Air Quality"}
     ]
     high_priority = [item for item in notifications if item["Severity"] == "High"]
+    medium_priority = [item for item in notifications if item["Severity"] == "Medium"]
+    status_label = "Action needed" if high_priority else "Monitoring"
+    status_color = "#DC2626" if high_priority else "#2563EB"
 
     st.markdown(
         """
         <style>
-        .notification-wrap {
-            border: 1px solid rgba(148, 163, 184, .28);
-            border-radius: 12px;
-            padding: 16px 16px 8px 16px;
-            margin: 16px 0 22px 0;
-            background: rgba(148, 163, 184, .06);
+        .notification-menu-banner {
+            border: 1px solid rgba(239, 91, 91, .28);
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin: 14px 0 10px 0;
+            background: linear-gradient(135deg, rgba(239, 91, 91, .14), rgba(37, 99, 235, .08));
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
         }
-        .notification-header {
+        .notification-menu-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            margin-bottom: 12px;
+            flex-wrap: wrap;
         }
         .notification-heading {
             font-size: 1.05rem;
@@ -1909,6 +1913,33 @@ def render_notification_center(
         .notification-summary {
             opacity: .76;
             font-size: .88rem;
+        }
+        .notification-pill-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .notification-pill {
+            border-radius: 999px;
+            padding: 5px 10px;
+            color: #fff;
+            font-size: .76rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        div[data-testid="stPopover"] button {
+            border-radius: 999px;
+            border: 1px solid rgba(239, 91, 91, .40);
+            background: linear-gradient(135deg, #ef5b5b, #2563eb);
+            color: #ffffff;
+            font-weight: 800;
+            box-shadow: 0 10px 24px rgba(239, 91, 91, .18);
+        }
+        div[data-testid="stPopover"] button:hover {
+            border-color: rgba(239, 91, 91, .70);
+            color: #ffffff;
+            filter: brightness(1.04);
         }
         .notification-card {
             border-left: 5px solid;
@@ -1945,7 +1976,7 @@ def render_notification_center(
             font-size: .92rem;
         }
         @media (prefers-color-scheme: light) {
-            .notification-wrap {
+            .notification-menu-banner {
                 background: #ffffff;
                 border-color: rgba(15, 23, 42, .12);
             }
@@ -1956,16 +1987,19 @@ def render_notification_center(
     )
     st.markdown(
         f"""
-        <div class="notification-wrap">
-            <div class="notification-header">
+        <div class="notification-menu-banner">
+            <div class="notification-menu-header">
                 <div>
-                    <div class="notification-heading">Notification Center</div>
+                    <div class="notification-heading">Notifications</div>
                     <div class="notification-summary">
-                        Installation risk, weather alerts, staffing, and growth blockers.
+                        Quick operational alerts, hidden in a dropdown so dashboards stay clean.
                     </div>
                 </div>
-                <div class="notification-summary">
-                    {len(high_priority)} high priority · {len(weather_notifications)} weather/air signals · {connected_sources}/4 APIs
+                <div class="notification-pill-row">
+                    <span class="notification-pill" style="background:{status_color};">{status_label}</span>
+                    <span class="notification-pill" style="background:#DC2626;">{len(high_priority)} High</span>
+                    <span class="notification-pill" style="background:#F59E0B;">{len(medium_priority)} Medium</span>
+                    <span class="notification-pill" style="background:#2563EB;">{connected_sources}/4 APIs</span>
                 </div>
             </div>
         </div>
@@ -1973,12 +2007,18 @@ def render_notification_center(
         unsafe_allow_html=True,
     )
 
-    if not notifications:
-        st.success("No active operational notifications right now.")
-        return
+    with st.popover(f"Open notification menu ({len(notifications)})", use_container_width=True):
+        st.markdown("#### Notification Menu")
+        st.caption(
+            f"{len(high_priority)} high priority · {len(medium_priority)} medium priority · "
+            f"{len(weather_notifications)} weather/air signals · {connected_sources}/4 APIs connected"
+        )
+        if not notifications:
+            st.success("No active operational notifications right now.")
+            return
 
-    for notification in notifications[:6]:
-        render_notification_card(notification)
+        for notification in notifications[:8]:
+            render_notification_card(notification)
 
 
 def render_external_api_insights() -> None:
