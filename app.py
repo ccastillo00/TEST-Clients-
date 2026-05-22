@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 import plotly.express as px
+import requests
 import streamlit as st
 
 from sample_data import (
@@ -160,6 +161,8 @@ SEASONAL_MONTH_WEIGHTS = {
     "Dec": 0.035,
 }
 MONTH_ORDER = list(SEASONAL_MONTH_WEIGHTS)
+GRAND_RAPIDS_LATITUDE = 42.9634
+GRAND_RAPIDS_LONGITUDE = -85.6681
 
 
 def get_secret(name: str, default: str = "") -> str:
@@ -192,6 +195,25 @@ def records_to_frame(records: list[dict[str, Any]]) -> pd.DataFrame:
         if df[column].map(lambda item: isinstance(item, dict)).any():
             df[column] = df[column].map(normalize_lookup)
     return df
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_grand_rapids_weather() -> dict[str, Any]:
+    response = requests.get(
+        "https://api.open-meteo.com/v1/forecast",
+        params={
+            "latitude": GRAND_RAPIDS_LATITUDE,
+            "longitude": GRAND_RAPIDS_LONGITUDE,
+            "current": "temperature_2m,precipitation,wind_speed_10m",
+            "temperature_unit": "fahrenheit",
+            "wind_speed_unit": "mph",
+            "precipitation_unit": "inch",
+            "timezone": "America/Detroit",
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -1358,6 +1380,58 @@ def render_gross_revenue(monthly: pd.DataFrame, segments: pd.DataFrame) -> None:
         with segment_col:
             st.dataframe(segments, width="stretch", hide_index=True)
 
+
+def render_api_test() -> None:
+    st.subheader("Temporary API test")
+    st.caption("This page validates that the deployed Streamlit app can fetch data from an external API.")
+    st.info("Temporary test only. We can remove this section after you confirm it works.")
+
+    try:
+        payload = load_grand_rapids_weather()
+    except requests.RequestException as exc:
+        st.error("The API request failed.")
+        st.exception(exc)
+        return
+
+    current = payload.get("current", {})
+    units = payload.get("current_units", {})
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        metric_card(
+            "Grand Rapids temperature",
+            f"{current.get('temperature_2m', 'N/A')} {units.get('temperature_2m', '')}",
+        )
+    with col2:
+        metric_card(
+            "Precipitation",
+            f"{current.get('precipitation', 'N/A')} {units.get('precipitation', '')}",
+        )
+    with col3:
+        metric_card(
+            "Wind speed",
+            f"{current.get('wind_speed_10m', 'N/A')} {units.get('wind_speed_10m', '')}",
+        )
+    with col4:
+        metric_card("API status", "Connected")
+
+    st.write("Source: Open-Meteo public API, no API key required.")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "API": "Open-Meteo Forecast",
+                    "Location": "Grand Rapids, MI",
+                    "Fetched Time": current.get("time", "N/A"),
+                    "Latitude": payload.get("latitude"),
+                    "Longitude": payload.get("longitude"),
+                }
+            ]
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+
+
 def main() -> None:
     if not authenticate_user():
         return
@@ -1374,6 +1448,7 @@ def main() -> None:
         "Sales Performance",
         "Marketing Performance",
         "Gross Revenue",
+        "API Test",
         "Zoho Sales",
         "Zoho Leads",
     ]
@@ -1414,6 +1489,8 @@ def main() -> None:
         render_marketing_performance(marketing_data)
     elif selected_dashboard == "Gross Revenue":
         render_gross_revenue(revenue_monthly, revenue_segments)
+    elif selected_dashboard == "API Test":
+        render_api_test()
     elif selected_dashboard == "Zoho Sales":
         render_deals(deals)
     elif selected_dashboard == "Zoho Leads":
