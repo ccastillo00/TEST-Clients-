@@ -21,7 +21,7 @@ from zoho_client import ZohoApiError, ZohoConfig, ZohoCRMClient
 
 
 st.set_page_config(
-    page_title="Enterprise Dashboard",
+    page_title="BathWorks MI Dashboard",
     page_icon="📈",
     layout="wide",
 )
@@ -51,10 +51,20 @@ LEAD_FIELDS = [
     "Owner",
 ]
 DIMENSION_COLUMNS = ["City", "Tenant", "Industry", "Product"]
+DIMENSION_LABELS = {
+    "City": "Service Area",
+    "Tenant": "Market / Location",
+    "Industry": "Customer Segment",
+    "Product": "Remodel Product",
+}
 LOGIN_USER = "camilo.cast"
 LOGIN_PASSWORD = "123456"
 DEMO_AUTH_TOKEN = "camilo-cast-demo"
 COMPANY_GROWTH_TARGET = 0.80
+BATHWORKS_LOGO_URL = (
+    "https://www.bathworksmi.com/_next/image?q=75&url=%2Fcdn--media%2F"
+    "jacuzzi_bathworks_logo_black_3x__1__oiyy6yi7cg9h3kzs0umcf9-924x164.png&w=1920"
+)
 
 
 def get_secret(name: str, default: str = "") -> str:
@@ -131,6 +141,31 @@ def percent(value: float) -> str:
     return f"{value:.1f}%"
 
 
+def render_logo(width: int = 420) -> None:
+    st.markdown(
+        f"""
+        <div style="background:#ffffff;border-radius:10px;padding:14px 18px;
+                    display:inline-block;margin-bottom:18px;">
+            <img src="{BATHWORKS_LOGO_URL}" alt="BathWorks MI Logo"
+                 style="width:{width}px;max-width:100%;height:auto;display:block;" />
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_sidebar_logo() -> None:
+    st.sidebar.markdown(
+        f"""
+        <div style="background:#ffffff;border-radius:8px;padding:10px 12px;margin-bottom:18px;">
+            <img src="{BATHWORKS_LOGO_URL}" alt="BathWorks MI Logo"
+                 style="width:100%;height:auto;display:block;" />
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def query_param(name: str, default: str = "") -> str:
     value = st.query_params.get(name, default)
     if isinstance(value, list):
@@ -150,8 +185,9 @@ def authenticate_user() -> bool:
         st.session_state["username"] = LOGIN_USER
         return True
 
-    st.title("Enterprise Dashboard")
-    st.caption("Sign in to review performance across operations, revenue, and growth.")
+    render_logo()
+    st.title("BathWorks MI Performance Dashboard")
+    st.caption("Sign in to review lead flow, appointments, sales, staffing, and revenue growth.")
     with st.form("login_form"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
@@ -180,7 +216,7 @@ def render_dimension_filters(df: pd.DataFrame, key_prefix: str) -> pd.DataFrame:
         for index, column in enumerate(available):
             options = sorted(filtered[column].dropna().astype(str).unique())
             selected = columns[index].multiselect(
-                column,
+                DIMENSION_LABELS.get(column, column),
                 options,
                 default=options,
                 key=f"{key_prefix}_{column}",
@@ -272,7 +308,8 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
     elif st.session_state.get("selected_dashboard") not in dashboard_options:
         st.session_state["selected_dashboard"] = dashboard_options[0]
 
-    st.sidebar.title("Workforce Dashboards")
+    render_sidebar_logo()
+    st.sidebar.title("BathWorks Dashboards")
     st.sidebar.markdown(
         """
         <style>
@@ -343,7 +380,7 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
         value=not has_zoho_secrets(),
         help="Turn this off after .streamlit/secrets.toml is configured.",
     )
-    st.sidebar.caption("Live data is read from Zoho CRM API v8.")
+    st.sidebar.caption("Live data can be read from Zoho CRM API v8.")
     if st.sidebar.button("Refresh data"):
         st.cache_data.clear()
         st.rerun()
@@ -355,7 +392,7 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
 
 
 def render_deals(deals: pd.DataFrame) -> None:
-    st.subheader("Zoho sales")
+    st.subheader("Zoho sales pipeline")
     if deals.empty:
         st.info("No deals are available for the current filters.")
         return
@@ -400,7 +437,7 @@ def render_deals(deals: pd.DataFrame) -> None:
 
 
 def render_leads(leads: pd.DataFrame) -> None:
-    st.subheader("Zoho leads")
+    st.subheader("Zoho lead flow")
     if leads.empty:
         st.info("No leads are available.")
         return
@@ -434,8 +471,8 @@ def render_growth_dashboard(
     call_center: pd.DataFrame,
     revenue_monthly: pd.DataFrame,
 ) -> None:
-    st.subheader("Company growth dashboard")
-    st.caption("Where we are today vs where we need to be to reach 80% growth by year end.")
+    st.subheader("BathWorks MI growth dashboard")
+    st.caption("Where BathWorks is today vs where it needs to be to reach 80% growth by year end.")
 
     staffing = build_call_center_staffing_model(call_center)
     gross_revenue = float(revenue_monthly["Gross_Revenue"].sum())
@@ -531,7 +568,7 @@ def render_growth_dashboard(
             x="Tenant",
             y=["Gross_Revenue", "Net_Revenue"],
             barmode="group",
-            title="Revenue base by tenant",
+            title="Revenue base by market / location",
         )
         fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
         st.plotly_chart(fig, width="stretch")
@@ -569,7 +606,7 @@ def render_growth_dashboard(
 
 
 def render_recruiter_performance(df: pd.DataFrame) -> None:
-    st.subheader("Recruiter performance")
+    st.subheader("Recruiting and installer staffing")
     df = render_dimension_filters(df, "recruiting")
     if df.empty:
         st.info("No recruiting records match the current filters.")
@@ -632,7 +669,7 @@ def render_recruiter_performance(df: pd.DataFrame) -> None:
         plot_bar(by_city, "City", "Hires", "Hires by city")
     with sub_col2:
         by_industry = df.groupby("Industry", as_index=False)["Candidates"].sum()
-        plot_bar(by_industry, "Industry", "Candidates", "Candidates by industry")
+        plot_bar(by_industry, "Industry", "Candidates", "Candidates by customer segment")
     with sub_col3:
         by_product = df.groupby("Product", as_index=False)["Open_Roles"].sum()
         plot_bar(by_product, "Product", "Open_Roles", "Open roles by product")
@@ -641,11 +678,11 @@ def render_recruiter_performance(df: pd.DataFrame) -> None:
 
 
 def render_call_center_performance(df: pd.DataFrame) -> None:
-    st.subheader("Call center performance")
-    st.caption("Company growth target: 80% expansion across markets.")
+    st.subheader("Lead and appointment center performance")
+    st.caption("BathWorks growth target: 80% expansion across service markets.")
     df = render_dimension_filters(df, "call_center")
     if df.empty:
-        st.info("No call center records match the current filters.")
+        st.info("No appointment center records match the current filters.")
         return
     answer_rate = df["Answered"].sum() / df["Calls"].sum() * 100
     avg_sla = float(df["SLA"].mean())
@@ -714,10 +751,10 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
         st.plotly_chart(fig, width="stretch")
     with sub_col2:
         by_tenant = df.groupby("Tenant", as_index=False)["Conversions"].sum()
-        plot_bar(by_tenant, "Tenant", "Conversions", "Conversions by tenant")
+        plot_bar(by_tenant, "Tenant", "Conversions", "Appointments by market / location")
     with sub_col3:
         by_industry = df.groupby("Industry", as_index=False)["CSAT"].mean()
-        plot_bar(by_industry, "Industry", "CSAT", "CSAT by industry")
+        plot_bar(by_industry, "Industry", "CSAT", "CSAT by customer segment")
 
     st.markdown("#### Staffing normalization and regression")
     model_col1, model_col2 = st.columns([1.1, 1])
@@ -871,7 +908,7 @@ def render_sales_performance(df: pd.DataFrame) -> None:
         plot_bar(by_city, "City", "Pipeline", "Pipeline by city")
     with sub_col2:
         by_industry = df.groupby("Industry", as_index=False)["Closed_Won"].sum()
-        plot_bar(by_industry, "Industry", "Closed_Won", "Closed won by industry")
+        plot_bar(by_industry, "Industry", "Closed_Won", "Closed won by customer segment")
     with sub_col3:
         by_product = df.groupby("Product", as_index=False)["Forecast"].sum()
         plot_bar(by_product, "Product", "Forecast", "Forecast by product")
@@ -950,7 +987,7 @@ def render_marketing_performance(df: pd.DataFrame) -> None:
         plot_bar(by_city, "City", "Leads", "Leads by city")
     with sub_col2:
         by_tenant = df.groupby("Tenant", as_index=False)["Revenue"].sum()
-        plot_bar(by_tenant, "Tenant", "Revenue", "Revenue by tenant")
+        plot_bar(by_tenant, "Tenant", "Revenue", "Revenue by market / location")
     with sub_col3:
         by_product = df.groupby("Product", as_index=False)["CAC"].mean()
         plot_bar(by_product, "Product", "CAC", "Average CAC by product")
@@ -1006,7 +1043,7 @@ def render_gross_revenue(monthly: pd.DataFrame, segments: pd.DataFrame) -> None:
         split_col1, split_col2 = st.columns(2)
         with split_col1:
             by_tenant = monthly.groupby("Tenant", as_index=False)["Gross_Revenue"].sum()
-            plot_bar(by_tenant, "Tenant", "Gross_Revenue", "Gross revenue by tenant")
+            plot_bar(by_tenant, "Tenant", "Gross_Revenue", "Gross revenue by market / location")
         with split_col2:
             by_city = monthly.groupby("City", as_index=False)["Net_Revenue"].sum()
             plot_bar(by_city, "City", "Net_Revenue", "Net revenue by city")
@@ -1038,7 +1075,7 @@ def render_gross_revenue(monthly: pd.DataFrame, segments: pd.DataFrame) -> None:
                 path=["Region", "Segment", "Industry"],
                 values="Revenue",
                 color="Margin",
-                title="Revenue by region, segment, and industry",
+                title="Revenue by region, service segment, and customer segment",
             )
             fig.update_layout(height=420, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig, width="stretch")
@@ -1053,15 +1090,15 @@ def main() -> None:
     if not authenticate_user():
         return
 
-    st.title("Enterprise Dashboard")
+    st.title("BathWorks MI Performance Dashboard")
     st.caption(
-        "Executive view of recruiting, call center, sales, marketing, and revenue performance."
+        "Executive view of lead flow, appointments, sales, installer staffing, and revenue growth."
     )
 
     dashboard_options = [
         "Main Growth Dashboard",
         "Recruiter Performance",
-        "Call Center Performance",
+        "Appointment Center Performance",
         "Sales Performance",
         "Marketing Performance",
         "Gross Revenue",
@@ -1097,7 +1134,7 @@ def main() -> None:
         render_growth_dashboard(deals, leads, call_center_data, revenue_monthly)
     elif selected_dashboard == "Recruiter Performance":
         render_recruiter_performance(recruiter_data)
-    elif selected_dashboard == "Call Center Performance":
+    elif selected_dashboard == "Appointment Center Performance":
         render_call_center_performance(call_center_data)
     elif selected_dashboard == "Sales Performance":
         render_sales_performance(sales_data)

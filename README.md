@@ -1,21 +1,22 @@
-# Enterprise Dashboard with Streamlit and Zoho CRM
+# BathWorks MI Dashboard with Streamlit and Zoho CRM
 
-Base Streamlit application for reviewing company dashboards and, when ready,
-connecting live data from Zoho CRM.
+BathWorks MI-focused Streamlit application for reviewing lead flow,
+appointments, sales, staffing, service markets, and revenue growth.
 
 It includes:
 
 - Basic login for the demo: `camilo.cast` / `123456`.
 - OAuth connection using a Zoho `refresh_token`.
 - Zoho CRM API v8 module reads.
-- Main growth dashboard showing where the company is today and where it needs
+- BathWorks growth dashboard showing where the company is today and where it needs
   to be by year end to hit 80% growth.
-- Sidebar navigation under Workforce Dashboards, with Settings below it.
-- Demo dashboards for recruiter performance, call center performance, sales
+- Sidebar navigation under BathWorks Dashboards, with Settings below it.
+- Demo dashboards for recruiting and installer staffing, appointment center performance, sales
   performance, marketing performance, and gross revenue.
-- Call center staffing model with agents by city, normalized KPIs, a simple
+- Appointment center staffing model with agents by service area, normalized KPIs, a simple
   regression, and an 80% company growth target scenario.
-- Cross-dimensional demo data by city, tenant, industry, and product.
+- Cross-dimensional demo data by West Michigan service area, market/location,
+  customer segment, and remodel product.
 - Gross revenue subtabs for overview, revenue mix, segments, and detail.
 - Demo mode so the app can be reviewed before Zoho credentials are available.
 
