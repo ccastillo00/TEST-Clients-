@@ -588,16 +588,19 @@ def render_dimension_filters(df: pd.DataFrame, key_prefix: str) -> pd.DataFrame:
     if not available or df.empty:
         return df
 
-    with st.expander("Filters", expanded=True):
+    with st.expander("Filters", expanded=False):
         columns = st.columns(len(available))
         filtered = df.copy()
         for index, column in enumerate(available):
             options = sorted(filtered[column].dropna().astype(str).unique())
+            label = DIMENSION_LABELS.get(column, column)
             selected = columns[index].multiselect(
-                DIMENSION_LABELS.get(column, column),
+                label,
                 options,
-                default=options,
-                key=f"{key_prefix}_{column}",
+                default=[],
+                key=f"{key_prefix}_{column}_dropdown",
+                placeholder=f"All {label.lower()}",
+                help=f"Leave empty to include all {label.lower()}.",
             )
             if selected:
                 filtered = filtered[filtered[column].astype(str).isin(selected)]
@@ -787,7 +790,14 @@ def render_deals(deals: pd.DataFrame) -> None:
 
     filtered = render_dimension_filters(deals, "zoho_deals")
     stage_options = sorted(deals["Stage"].dropna().unique()) if "Stage" in deals else []
-    selected_stages = st.multiselect("Stages", stage_options, default=stage_options)
+    selected_stages = st.multiselect(
+        "Stages",
+        stage_options,
+        default=[],
+        key="zoho_deals_stage_dropdown",
+        placeholder="All stages",
+        help="Leave empty to include all deal stages.",
+    )
     if selected_stages and "Stage" in filtered:
         filtered = filtered[filtered["Stage"].isin(selected_stages)]
 
