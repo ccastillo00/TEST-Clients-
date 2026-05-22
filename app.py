@@ -65,6 +65,101 @@ BATHWORKS_LOGO_URL = (
     "https://www.bathworksmi.com/_next/image?q=75&url=%2Fcdn--media%2F"
     "jacuzzi_bathworks_logo_black_3x__1__oiyy6yi7cg9h3kzs0umcf9-924x164.png&w=1920"
 )
+CHART_COLORWAY = [
+    "#1D4ED8",
+    "#EF4444",
+    "#F59E0B",
+    "#10B981",
+    "#8B5CF6",
+    "#EC4899",
+    "#06B6D4",
+    "#84CC16",
+]
+CITY_COLORS = {
+    "Grand Rapids": "#1D4ED8",
+    "Holland": "#14B8A6",
+    "Muskegon": "#F97316",
+    "Kalamazoo": "#8B5CF6",
+    "Saginaw": "#EF4444",
+    "Traverse City": "#22C55E",
+}
+KPI_COLORS = {
+    "Current": "#1D4ED8",
+    "Target": "#EF4444",
+    "Gap": "#F59E0B",
+    "Actual Revenue": "#1D4ED8",
+    "Seasonal Target": "#EF4444",
+    "Gross_Revenue": "#2563EB",
+    "Net_Revenue": "#10B981",
+    "Refunds": "#F97316",
+    "Pipeline": "#7C3AED",
+    "Closed_Won": "#10B981",
+    "Forecast": "#F59E0B",
+    "Candidates": "#2563EB",
+    "Interviews": "#06B6D4",
+    "Offers": "#F59E0B",
+    "Hires": "#22C55E",
+    "Answered": "#10B981",
+    "Missed": "#EF4444",
+    "Calls": "#2563EB",
+    "Agents": "#8B5CF6",
+    "Recommended_Agents": "#F59E0B",
+    "SLA": "#14B8A6",
+    "CSAT": "#EC4899",
+    "Leads": "#2563EB",
+    "MQL": "#F59E0B",
+    "SQL": "#22C55E",
+}
+PRODUCT_COLORS = {
+    "Jacuzzi Bathtub": "#1D4ED8",
+    "Walk-In Shower": "#14B8A6",
+    "Tub-to-Shower Conversion": "#F97316",
+    "Shower-to-Tub Conversion": "#8B5CF6",
+    "Senior Safety Remodel": "#EC4899",
+}
+RECRUITER_COLORS = {
+    "Ana Torres": "#1D4ED8",
+    "Miguel Rios": "#F97316",
+    "Valeria Gomez": "#22C55E",
+    "Santiago Mora": "#EF4444",
+    "Nina Patel": "#8B5CF6",
+    "Laura Pena": "#1D4ED8",
+    "Daniel Ortiz": "#F97316",
+    "Camilo Ruiz": "#22C55E",
+    "Paula Mejia": "#EF4444",
+    "Ava Chen": "#8B5CF6",
+    "Noah Smith": "#06B6D4",
+}
+CHANNEL_COLORS = {
+    "Paid Search": "#1D4ED8",
+    "Social Ads": "#EC4899",
+    "Email": "#F59E0B",
+    "Home Shows": "#10B981",
+    "Organic": "#22C55E",
+    "Referrals": "#8B5CF6",
+}
+SEGMENT_COLORS = {
+    "Wet Area Remodel": "#1D4ED8",
+    "Aging-in-Place": "#8B5CF6",
+    "Jacuzzi Dealer": "#14B8A6",
+    "Homeowner Remodel": "#F97316",
+    "Veteran Accessibility": "#EC4899",
+}
+SEASONAL_MONTH_WEIGHTS = {
+    "Jan": 0.055,
+    "Feb": 0.060,
+    "Mar": 0.075,
+    "Apr": 0.095,
+    "May": 0.115,
+    "Jun": 0.120,
+    "Jul": 0.115,
+    "Aug": 0.105,
+    "Sep": 0.095,
+    "Oct": 0.080,
+    "Nov": 0.050,
+    "Dec": 0.035,
+}
+MONTH_ORDER = list(SEASONAL_MONTH_WEIGHTS)
 
 
 def get_secret(name: str, default: str = "") -> str:
@@ -139,6 +234,31 @@ def money(value: float) -> str:
 
 def percent(value: float) -> str:
     return f"{value:.1f}%"
+
+
+def chart_theme(fig: Any, height: int = 360) -> None:
+    fig.update_layout(
+        height=height,
+        margin=dict(l=20, r=20, t=50, b=20),
+        colorway=CHART_COLORWAY,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend_title_text="",
+    )
+
+
+def color_map_for(column: str | None) -> dict[str, str] | None:
+    if column == "City":
+        return CITY_COLORS
+    if column == "Product":
+        return PRODUCT_COLORS
+    if column == "Recruiter":
+        return RECRUITER_COLORS
+    if column == "Channel":
+        return CHANNEL_COLORS
+    if column == "Industry":
+        return SEGMENT_COLORS
+    return None
 
 
 def render_logo(width: int = 420) -> None:
@@ -237,8 +357,18 @@ def plot_bar(
     if df.empty or x not in df or y not in df:
         st.info("No data available for this chart.")
         return
-    fig = px.bar(df, x=x, y=y, color=color, title=title)
-    fig.update_layout(height=height, margin=dict(l=20, r=20, t=50, b=20))
+    chart_color = color
+    if chart_color is None and x in {"City", "Product", "Industry", "Channel", "Recruiter"}:
+        chart_color = x
+    fig = px.bar(
+        df,
+        x=x,
+        y=y,
+        color=chart_color,
+        title=title,
+        color_discrete_map=color_map_for(chart_color),
+    )
+    chart_theme(fig, height)
     st.plotly_chart(fig, width="stretch")
 
 
@@ -426,10 +556,11 @@ def render_deals(deals: pd.DataFrame) -> None:
                 by_stage,
                 x="Stage",
                 y="Amount",
+                color="Stage",
                 title="Pipeline by stage",
                 labels={"Stage": "Stage", "Amount": "Amount"},
             )
-            fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+            chart_theme(fig, 360)
             st.plotly_chart(fig, width="stretch")
     with table_col:
         columns = [col for col in DEAL_FIELDS if col in filtered.columns]
@@ -457,12 +588,95 @@ def render_leads(leads: pd.DataFrame) -> None:
                 names="Lead_Status",
                 values="size",
                 title="Distribution by status",
+                color_discrete_sequence=CHART_COLORWAY,
             )
-            fig.update_layout(height=320, margin=dict(l=20, r=20, t=50, b=20))
+            chart_theme(fig, 320)
             st.plotly_chart(fig, width="stretch")
 
     columns = [col for col in LEAD_FIELDS if col in leads.columns]
     st.dataframe(leads[columns], width="stretch", hide_index=True)
+
+
+def build_seasonal_growth_plan(revenue_monthly: pd.DataFrame) -> tuple[pd.DataFrame, float, float]:
+    monthly_actuals = (
+        revenue_monthly.groupby("Month", as_index=False)["Gross_Revenue"]
+        .sum()
+        .rename(columns={"Gross_Revenue": "Actual Revenue"})
+    )
+    monthly_actuals["Month"] = pd.Categorical(
+        monthly_actuals["Month"], categories=MONTH_ORDER, ordered=True
+    )
+    monthly_actuals = monthly_actuals.sort_values("Month")
+
+    actual_months = [month for month in MONTH_ORDER if month in set(monthly_actuals["Month"].astype(str))]
+    generated_to_date = float(monthly_actuals["Actual Revenue"].sum())
+    actual_weight = sum(SEASONAL_MONTH_WEIGHTS[month] for month in actual_months)
+    baseline_full_year = generated_to_date / actual_weight if actual_weight else generated_to_date
+    year_end_target = baseline_full_year * (1 + COMPANY_GROWTH_TARGET)
+
+    plan = pd.DataFrame(
+        {
+            "Month": MONTH_ORDER,
+            "Seasonal_Weight": [SEASONAL_MONTH_WEIGHTS[month] for month in MONTH_ORDER],
+        }
+    )
+    plan = plan.merge(monthly_actuals, on="Month", how="left")
+    plan["Actual Revenue"] = plan["Actual Revenue"].fillna(0)
+    plan["Seasonal Target"] = plan["Seasonal_Weight"] * year_end_target
+    plan["Cumulative Actual"] = plan["Actual Revenue"].cumsum()
+    plan["Cumulative Target"] = plan["Seasonal Target"].cumsum()
+    plan["Remaining Required"] = (plan["Cumulative Target"] - plan["Cumulative Actual"]).clip(lower=0)
+    plan["Market Season"] = plan["Month"].map(
+        {
+            "Jan": "Slow planning",
+            "Feb": "Slow planning",
+            "Mar": "Ramp up",
+            "Apr": "Peak remodel demand",
+            "May": "Peak remodel demand",
+            "Jun": "Peak remodel demand",
+            "Jul": "Peak remodel demand",
+            "Aug": "High demand",
+            "Sep": "High demand",
+            "Oct": "Moderate demand",
+            "Nov": "Holiday slowdown",
+            "Dec": "Holiday slowdown",
+        }
+    )
+    return plan, generated_to_date, year_end_target
+
+
+def render_revenue_target_cards(generated_to_date: float, year_end_target: float) -> None:
+    remaining = year_end_target - generated_to_date
+    progress = generated_to_date / year_end_target * 100 if year_end_target else 0
+    st.markdown(
+        f"""
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:8px 0 22px 0;">
+            <div style="border:1px solid rgba(29,78,216,.35);border-radius:14px;padding:26px;
+                        background:linear-gradient(135deg, rgba(29,78,216,.20), rgba(20,184,166,.10));">
+                <div style="font-size:0.85rem;text-transform:uppercase;letter-spacing:.08em;font-weight:800;">
+                    Generated so far
+                </div>
+                <div style="font-size:3.2rem;line-height:1.1;font-weight:900;margin-top:8px;">
+                    {money(generated_to_date)}
+                </div>
+                <div style="margin-top:10px;opacity:.78;">Current BathWorks MI gross revenue in the demo period.</div>
+            </div>
+            <div style="border:1px solid rgba(239,68,68,.38);border-radius:14px;padding:26px;
+                        background:linear-gradient(135deg, rgba(239,68,68,.20), rgba(245,158,11,.14));">
+                <div style="font-size:0.85rem;text-transform:uppercase;letter-spacing:.08em;font-weight:800;">
+                    Year-end target for +80%
+                </div>
+                <div style="font-size:3.2rem;line-height:1.1;font-weight:900;margin-top:8px;">
+                    {money(year_end_target)}
+                </div>
+                <div style="margin-top:10px;opacity:.78;">
+                    Remaining gap: <strong>{money(remaining)}</strong> · Progress: <strong>{progress:.1f}%</strong>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_growth_dashboard(
@@ -475,9 +689,9 @@ def render_growth_dashboard(
     st.caption("Where BathWorks is today vs where it needs to be to reach 80% growth by year end.")
 
     staffing = build_call_center_staffing_model(call_center)
-    gross_revenue = float(revenue_monthly["Gross_Revenue"].sum())
-    target_revenue = gross_revenue * (1 + COMPANY_GROWTH_TARGET)
+    seasonal_plan, gross_revenue, target_revenue = build_seasonal_growth_plan(revenue_monthly)
     revenue_gap = target_revenue - gross_revenue
+    render_revenue_target_cards(gross_revenue, target_revenue)
 
     current_agents = int(staffing["Agents"].sum())
     required_agents = int(staffing["Recommended_Agents"].sum())
@@ -537,8 +751,9 @@ def render_growth_dashboard(
             color="Scenario",
             barmode="group",
             title="Current state vs year-end target",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=390, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 390)
         st.plotly_chart(fig, width="stretch")
 
     with route_col:
@@ -547,11 +762,49 @@ def render_growth_dashboard(
             staffing_by_city,
             x="City",
             y="Agent_Gap",
-            color="Workload_Index",
+            color="City",
             title="Hiring gap by market",
             labels={"Agent_Gap": "Agent gap"},
+            color_discrete_map=CITY_COLORS,
         )
-        fig.update_layout(height=390, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 390)
+        st.plotly_chart(fig, width="stretch")
+
+    seasonal_chart = seasonal_plan.melt(
+        id_vars=["Month", "Market Season"],
+        value_vars=["Actual Revenue", "Seasonal Target"],
+        var_name="Scenario",
+        value_name="Revenue",
+    )
+    season_col1, season_col2 = st.columns([1.2, 1])
+    with season_col1:
+        fig = px.bar(
+            seasonal_chart,
+            x="Month",
+            y="Revenue",
+            color="Scenario",
+            barmode="group",
+            title="Seasonal growth plan, not a flat monthly target",
+            hover_data=["Market Season"],
+            color_discrete_map=KPI_COLORS,
+            category_orders={"Month": MONTH_ORDER},
+        )
+        chart_theme(fig, 390)
+        st.plotly_chart(fig, width="stretch")
+    with season_col2:
+        fig = px.line(
+            seasonal_plan,
+            x="Month",
+            y=["Cumulative Actual", "Cumulative Target"],
+            markers=True,
+            title="Cumulative progress to +80% target",
+            color_discrete_map={
+                "Cumulative Actual": "#1D4ED8",
+                "Cumulative Target": "#EF4444",
+            },
+            category_orders={"Month": MONTH_ORDER},
+        )
+        chart_theme(fig, 390)
         st.plotly_chart(fig, width="stretch")
 
     revenue_by_tenant = revenue_monthly.groupby("Tenant", as_index=False)[
@@ -569,8 +822,9 @@ def render_growth_dashboard(
             y=["Gross_Revenue", "Net_Revenue"],
             barmode="group",
             title="Revenue base by market / location",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 360)
         st.plotly_chart(fig, width="stretch")
     with detail_col2:
         fig = px.scatter(
@@ -580,8 +834,9 @@ def render_growth_dashboard(
             size="Target_Revenue",
             color="City",
             title="Market revenue gap to +80%",
+            color_discrete_map=CITY_COLORS,
         )
-        fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 360)
         st.plotly_chart(fig, width="stretch")
 
     action_plan = staffing[
@@ -637,8 +892,9 @@ def render_recruiter_performance(df: pd.DataFrame) -> None:
             y=["Candidates", "Interviews", "Offers", "Hires"],
             barmode="group",
             title="Recruiter funnel",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 380)
         st.plotly_chart(fig, width="stretch")
     with table_col:
         quality_by_recruiter = (
@@ -659,8 +915,9 @@ def render_recruiter_performance(df: pd.DataFrame) -> None:
             color="Recruiter",
             hover_data=["Candidates"],
             title="Quality vs speed by recruiter",
+            color_discrete_map=RECRUITER_COLORS,
         )
-        fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 380)
         st.plotly_chart(fig, width="stretch")
 
     sub_col1, sub_col2, sub_col3 = st.columns(3)
@@ -722,8 +979,9 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
             y=["Answered", "Missed"],
             barmode="stack",
             title="Answered vs missed calls",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 360)
         st.plotly_chart(fig, width="stretch")
     with table_col:
         service_by_team = df.groupby("Team", as_index=False)[["SLA", "CSAT"]].mean()
@@ -733,8 +991,9 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
             y=["SLA", "CSAT"],
             markers=True,
             title="SLA and satisfaction by team",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 360)
         st.plotly_chart(fig, width="stretch")
 
     sub_col1, sub_col2, sub_col3 = st.columns(3)
@@ -746,8 +1005,9 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
             y=["Calls", "Agents"],
             barmode="group",
             title="Call volume and agents by city",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=340, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 340)
         st.plotly_chart(fig, width="stretch")
     with sub_col2:
         by_tenant = df.groupby("Tenant", as_index=False)["Conversions"].sum()
@@ -785,15 +1045,16 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
             ],
             title="Regression: normalized workload vs current agents",
             labels={"Workload_Index": "Normalized workload index", "Agents": "Current agents"},
+            color_discrete_map=CITY_COLORS,
         )
         fig.add_scatter(
             x=line_x,
             y=line_y,
             mode="lines",
             name="Regression line",
-            line=dict(color="#2f343d", width=3),
+            line=dict(color="#F59E0B", width=3),
         )
-        fig.update_layout(height=390, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 390)
         st.plotly_chart(fig, width="stretch")
     with model_col2:
         comparison = staffing.melt(
@@ -809,8 +1070,9 @@ def render_call_center_performance(df: pd.DataFrame) -> None:
             color="Staffing_Type",
             barmode="group",
             title="Current vs recommended agents by market",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=390, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 390)
         st.plotly_chart(fig, width="stretch")
 
     display_columns = [
@@ -886,8 +1148,9 @@ def render_sales_performance(df: pd.DataFrame) -> None:
             y=["Pipeline", "Closed_Won", "Forecast"],
             barmode="group",
             title="Pipeline, closed won, and forecast",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 380)
         st.plotly_chart(fig, width="stretch")
     with table_col:
         fig = px.scatter(
@@ -898,8 +1161,9 @@ def render_sales_performance(df: pd.DataFrame) -> None:
             color="Rep",
             title="Win rate vs average ticket",
             labels={"Win_Rate": "Win rate", "Avg_Deal_Size": "Average deal size"},
+            color_discrete_map=RECRUITER_COLORS,
         )
-        fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 380)
         st.plotly_chart(fig, width="stretch")
 
     sub_col1, sub_col2, sub_col3 = st.columns(3)
@@ -966,8 +1230,9 @@ def render_marketing_performance(df: pd.DataFrame) -> None:
             color="Stage",
             barmode="group",
             title="Marketing funnel by channel",
+            color_discrete_map=KPI_COLORS,
         )
-        fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 360)
         st.plotly_chart(fig, width="stretch")
     with table_col:
         fig = px.scatter(
@@ -977,8 +1242,9 @@ def render_marketing_performance(df: pd.DataFrame) -> None:
             size="MQL",
             color="Channel",
             title="Spend vs revenue",
+            color_discrete_map=CHANNEL_COLORS,
         )
-        fig.update_layout(height=360, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 360)
         st.plotly_chart(fig, width="stretch")
 
     sub_col1, sub_col2, sub_col3 = st.columns(3)
@@ -1034,10 +1300,10 @@ def render_gross_revenue(monthly: pd.DataFrame, segments: pd.DataFrame) -> None:
             x="Month",
             y=["Gross_Revenue", "Net_Revenue"],
             markers=True,
-            color_discrete_sequence=px.colors.qualitative.Set2,
+            color_discrete_map=KPI_COLORS,
             title="Monthly revenue",
         )
-        fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 380)
         st.plotly_chart(fig, width="stretch")
 
         split_col1, split_col2 = st.columns(2)
@@ -1063,8 +1329,13 @@ def render_gross_revenue(monthly: pd.DataFrame, segments: pd.DataFrame) -> None:
             y="Revenue",
             color="Revenue_Type",
             title="Revenue composition",
+            color_discrete_map={
+                "New": "#1D4ED8",
+                "Expansion": "#F59E0B",
+                "Recurring": "#10B981",
+            },
         )
-        fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
+        chart_theme(fig, 380)
         st.plotly_chart(fig, width="stretch")
     with segment_tab:
         if segments.empty:
@@ -1074,10 +1345,11 @@ def render_gross_revenue(monthly: pd.DataFrame, segments: pd.DataFrame) -> None:
                 segments,
                 path=["Region", "Segment", "Industry"],
                 values="Revenue",
-                color="Margin",
+                color="Segment",
                 title="Revenue by region, service segment, and customer segment",
+                color_discrete_sequence=CHART_COLORWAY,
             )
-            fig.update_layout(height=420, margin=dict(l=20, r=20, t=50, b=20))
+            chart_theme(fig, 420)
             st.plotly_chart(fig, width="stretch")
     with table_tab:
         table_col, segment_col = st.columns(2)

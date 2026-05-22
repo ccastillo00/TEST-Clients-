@@ -10,6 +10,10 @@ It includes:
 - Zoho CRM API v8 module reads.
 - BathWorks growth dashboard showing where the company is today and where it needs
   to be by year end to hit 80% growth.
+- Seasonal growth plan that weights stronger remodeling months more heavily
+  instead of spreading the 80% target evenly across the year.
+- Branded chart colors by service area, KPI, remodel product, marketing channel,
+  and team member.
 - Sidebar navigation under BathWorks Dashboards, with Settings below it.
 - Demo dashboards for recruiting and installer staffing, appointment center performance, sales
   performance, marketing performance, and gross revenue.
