@@ -22,6 +22,8 @@ It includes:
 - Cross-dimensional demo data by West Michigan service area, market/location,
   customer segment, and remodel product.
 - Gross revenue subtabs for overview, revenue mix, segments, and detail.
+- External API Insights dashboard combining open APIs for weather, official weather
+  alerts, air quality, and public market demographics.
 - Demo mode so the app can be reviewed before Zoho credentials are available.
 
 ## 1. Create the environment
@@ -75,8 +77,24 @@ If your company uses Zoho Books, Desk, Analytics, or another Zoho product, the
 dashboard structure can stay in place while `zoho_client.py` is adapted to those
 endpoints.
 
+## Open API demo sources
+
+The External API Insights dashboard uses public APIs that do not require secrets:
+
+- Open-Meteo forecast API for temperature, precipitation, and wind speed.
+- National Weather Service alerts API for active alert counts by service area.
+- Open-Meteo air quality API for AQI and PM2.5.
+- Data USA Tesseract API for ACS population, household income, and home value.
+
+These signals are combined into simple demo scores for install risk, operations
+readiness, and market opportunity by BathWorks service area.
+
 ## Official references
 
 - Zoho CRM API v8: https://www.zoho.com/crm/developer/docs/api/v8/
 - OAuth in Zoho CRM API v8: https://www.zoho.com/crm/developer/docs/api/v8/oauth-overview.html
 - Get Records: https://www.zoho.com/crm/developer/docs/api/v8/get-records.html
+- Data USA API: https://datausa.io/about/api/
+- Open-Meteo forecast API: https://open-meteo.com/en/docs
+- Open-Meteo air quality API: https://open-meteo.com/en/docs/air-quality-api
+- National Weather Service API: https://www.weather.gov/documentation/services-web-api

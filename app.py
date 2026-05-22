@@ -161,8 +161,44 @@ SEASONAL_MONTH_WEIGHTS = {
     "Dec": 0.035,
 }
 MONTH_ORDER = list(SEASONAL_MONTH_WEIGHTS)
-GRAND_RAPIDS_LATITUDE = 42.9634
-GRAND_RAPIDS_LONGITUDE = -85.6681
+SERVICE_AREAS = {
+    "Grand Rapids": {
+        "latitude": 42.9634,
+        "longitude": -85.6681,
+        "census_name": "Grand Rapids city, Michigan",
+        "datausa_place_id": "16000US2634000",
+    },
+    "Holland": {
+        "latitude": 42.7875,
+        "longitude": -86.1089,
+        "census_name": "Holland city, Michigan",
+        "datausa_place_id": "16000US2638640",
+    },
+    "Muskegon": {
+        "latitude": 43.2342,
+        "longitude": -86.2484,
+        "census_name": "Muskegon city, Michigan",
+        "datausa_place_id": "16000US2656320",
+    },
+    "Kalamazoo": {
+        "latitude": 42.2917,
+        "longitude": -85.5872,
+        "census_name": "Kalamazoo city, Michigan",
+        "datausa_place_id": "16000US2642160",
+    },
+    "Saginaw": {
+        "latitude": 43.4195,
+        "longitude": -83.9508,
+        "census_name": "Saginaw city, Michigan",
+        "datausa_place_id": "16000US2670520",
+    },
+    "Traverse City": {
+        "latitude": 44.7631,
+        "longitude": -85.6206,
+        "census_name": "Traverse City city, Michigan",
+        "datausa_place_id": "16000US2680340",
+    },
+}
 
 
 def get_secret(name: str, default: str = "") -> str:
@@ -198,22 +234,167 @@ def records_to_frame(records: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def load_grand_rapids_weather() -> dict[str, Any]:
+def load_open_meteo_weather() -> pd.DataFrame:
+    rows = []
+    for city, meta in SERVICE_AREAS.items():
+        response = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": meta["latitude"],
+                "longitude": meta["longitude"],
+                "current": "temperature_2m,precipitation,wind_speed_10m",
+                "temperature_unit": "fahrenheit",
+                "wind_speed_unit": "mph",
+                "precipitation_unit": "inch",
+                "timezone": "America/Detroit",
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        current = payload.get("current", {})
+        rows.append(
+            {
+                "City": city,
+                "API Source": "Open-Meteo",
+                "Temperature": current.get("temperature_2m"),
+                "Precipitation": current.get("precipitation"),
+                "Wind Speed": current.get("wind_speed_10m"),
+                "Fetched Time": current.get("time"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_nws_alerts() -> pd.DataFrame:
+    rows = []
+    headers = {"User-Agent": "BathWorksMI-Dashboard/1.0"}
+    for city, meta in SERVICE_AREAS.items():
+        response = requests.get(
+            "https://api.weather.gov/alerts/active",
+            params={"point": f"{meta['latitude']},{meta['longitude']}"},
+            headers=headers,
+            timeout=20,
+        )
+        response.raise_for_status()
+        features = response.json().get("features", [])
+        events = sorted(
+            {
+                feature.get("properties", {}).get("event", "Unknown alert")
+                for feature in features
+            }
+        )
+        rows.append(
+            {
+                "City": city,
+                "API Source": "National Weather Service",
+                "Active Alerts": len(features),
+                "Alert Types": ", ".join(events) if events else "None",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_open_meteo_air_quality() -> pd.DataFrame:
+    rows = []
+    for city, meta in SERVICE_AREAS.items():
+        response = requests.get(
+            "https://air-quality-api.open-meteo.com/v1/air-quality",
+            params={
+                "latitude": meta["latitude"],
+                "longitude": meta["longitude"],
+                "current": "us_aqi,pm2_5",
+                "timezone": "America/Detroit",
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+        current = response.json().get("current", {})
+        rows.append(
+            {
+                "City": city,
+                "API Source": "Open-Meteo Air Quality",
+                "US AQI": current.get("us_aqi"),
+                "PM2.5": current.get("pm2_5"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def datausa_query(
+    cube: str,
+    drilldowns: str,
+    measures: str,
+    include: str,
+) -> pd.DataFrame:
     response = requests.get(
-        "https://api.open-meteo.com/v1/forecast",
+        "https://api.datausa.io/tesseract/data.jsonrecords",
         params={
-            "latitude": GRAND_RAPIDS_LATITUDE,
-            "longitude": GRAND_RAPIDS_LONGITUDE,
-            "current": "temperature_2m,precipitation,wind_speed_10m",
-            "temperature_unit": "fahrenheit",
-            "wind_speed_unit": "mph",
-            "precipitation_unit": "inch",
-            "timezone": "America/Detroit",
+            "cube": cube,
+            "drilldowns": drilldowns,
+            "measures": measures,
+            "include": include,
+            "limit": "100,0",
         },
-        timeout=20,
+        timeout=40,
     )
     response.raise_for_status()
-    return response.json()
+    return pd.DataFrame(response.json().get("data", []))
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_datausa_market_data() -> pd.DataFrame:
+    place_ids = ",".join(meta["datausa_place_id"] for meta in SERVICE_AREAS.values())
+    city_lookup = {meta["datausa_place_id"]: city for city, meta in SERVICE_AREAS.items()}
+
+    population = datausa_query(
+        cube="acs_yg_total_population_5",
+        drilldowns="Place,Year",
+        measures="Population",
+        include=f"Year:2023;Place:{place_ids}",
+    )
+    income = datausa_query(
+        cube="acs_ygr_median_household_income_race_5",
+        drilldowns="Place,Year,Race",
+        measures="Household Income by Race",
+        include=f"Year:2023;Race:0;Place:{place_ids}",
+    )
+    home_value = datausa_query(
+        cube="acs_yg_housing_median_value_5",
+        drilldowns="Place,Year",
+        measures="Property Value",
+        include=f"Year:2023;Place:{place_ids}",
+    )
+
+    market = pd.DataFrame({"Place ID": list(city_lookup)})
+    for frame in [population, income, home_value]:
+        if not frame.empty and "Place ID" in frame:
+            market = market.merge(frame, on="Place ID", how="left")
+
+    market["City"] = market["Place ID"].map(city_lookup)
+    market = market.rename(
+        columns={
+            "Household Income by Race": "Median Household Income",
+            "Property Value": "Median Home Value",
+        }
+    )
+    for column in ["Population", "Median Household Income", "Median Home Value"]:
+        if column not in market:
+            market[column] = pd.NA
+        market[column] = pd.to_numeric(market[column], errors="coerce")
+        market.loc[market[column] < 0, column] = pd.NA
+    market["API Source"] = "Data USA ACS 5-Year"
+    return market[
+        [
+            "City",
+            "API Source",
+            "Population",
+            "Median Household Income",
+            "Median Home Value",
+        ]
+    ].sort_values("City")
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -1381,51 +1562,283 @@ def render_gross_revenue(monthly: pd.DataFrame, segments: pd.DataFrame) -> None:
             st.dataframe(segments, width="stretch", hide_index=True)
 
 
-def render_api_test() -> None:
-    st.subheader("Temporary API test")
-    st.caption("This page validates that the deployed Streamlit app can fetch data from an external API.")
-    st.info("Temporary test only. We can remove this section after you confirm it works.")
+def safe_float(value: Any, fallback: float = 0.0) -> float:
+    numeric = pd.to_numeric(value, errors="coerce")
+    return fallback if pd.isna(numeric) else float(numeric)
+
+
+def weather_install_risk(row: pd.Series) -> float:
+    precipitation = safe_float(row.get("Precipitation"))
+    wind_speed = safe_float(row.get("Wind Speed"))
+    temperature = safe_float(row.get("Temperature"), 65)
+    precip_risk = min(45, precipitation * 120)
+    wind_risk = max(0, wind_speed - 15) * 2.5
+    cold_risk = max(0, 35 - temperature) * 1.2
+    heat_risk = max(0, temperature - 88) * 0.8
+    return min(100, precip_risk + wind_risk + cold_risk + heat_risk)
+
+
+def build_external_api_analysis(
+    weather: pd.DataFrame,
+    alerts: pd.DataFrame,
+    air_quality: pd.DataFrame,
+    market: pd.DataFrame,
+) -> pd.DataFrame:
+    analysis = (
+        weather.drop(columns=["API Source"], errors="ignore")
+        .merge(alerts.drop(columns=["API Source"], errors="ignore"), on="City", how="left")
+        .merge(air_quality.drop(columns=["API Source"], errors="ignore"), on="City", how="left")
+        .merge(market.drop(columns=["API Source"], errors="ignore"), on="City", how="left")
+    )
+    fallback_columns = {
+        "Active Alerts": 0,
+        "Alert Types": "None",
+        "US AQI": 50,
+        "PM2.5": 8,
+        "Population": pd.NA,
+        "Median Household Income": pd.NA,
+        "Median Home Value": pd.NA,
+    }
+    for column, fallback in fallback_columns.items():
+        if column not in analysis:
+            analysis[column] = fallback
+
+    analysis["Install Risk Score"] = analysis.apply(weather_install_risk, axis=1)
+    analysis["Active Alerts"] = pd.to_numeric(analysis["Active Alerts"], errors="coerce").fillna(0)
+    analysis["US AQI"] = pd.to_numeric(analysis["US AQI"], errors="coerce").fillna(50)
+    analysis["PM2.5"] = pd.to_numeric(analysis["PM2.5"], errors="coerce").fillna(8)
+    analysis["Alert Risk"] = analysis["Active Alerts"] * 12
+    analysis["Air Quality Risk"] = (analysis["US AQI"] / 2).clip(upper=60)
+
+    for column in ["Population", "Median Household Income", "Median Home Value"]:
+        analysis[column] = pd.to_numeric(analysis[column], errors="coerce")
+
+    neutral_score = pd.Series([50.0] * len(analysis), index=analysis.index)
+    analysis["Population Score"] = (
+        min_max_normalize(analysis["Population"]) * 100
+        if analysis["Population"].notna().any()
+        else neutral_score
+    )
+    analysis["Income Score"] = (
+        min_max_normalize(analysis["Median Household Income"]) * 100
+        if analysis["Median Household Income"].notna().any()
+        else neutral_score
+    )
+    analysis["Home Value Score"] = (
+        min_max_normalize(analysis["Median Home Value"]) * 100
+        if analysis["Median Home Value"].notna().any()
+        else neutral_score
+    )
+    analysis["Operations Readiness Score"] = (
+        100
+        - analysis["Install Risk Score"]
+        - analysis["Alert Risk"]
+        - analysis["Air Quality Risk"] * 0.35
+    ).clip(lower=0, upper=100)
+    analysis["Market Opportunity Score"] = (
+        analysis["Population Score"] * 0.30
+        + analysis["Income Score"] * 0.25
+        + analysis["Home Value Score"] * 0.20
+        + analysis["Operations Readiness Score"] * 0.25
+    )
+    analysis["Suggested Action"] = analysis["Market Opportunity Score"].map(
+        lambda score: "Prioritize appointments"
+        if score >= 70
+        else "Watch and nurture"
+        if score >= 45
+        else "Maintain coverage"
+    )
+    return analysis.sort_values("Market Opportunity Score", ascending=False)
+
+
+def render_external_api_insights() -> None:
+    st.subheader("External API insights")
+    st.caption(
+        "Open APIs can enrich the dashboard with market, weather, air quality, and operational context from outside Zoho."
+    )
+
+    api_errors = []
+    connected_sources = 0
+    try:
+        weather = load_open_meteo_weather()
+        connected_sources += int(not weather.empty)
+    except Exception as exc:
+        api_errors.append(f"Open-Meteo failed: {exc}")
+        weather = pd.DataFrame(
+            {
+                "City": list(SERVICE_AREAS),
+                "Temperature": [65] * len(SERVICE_AREAS),
+                "Precipitation": [0] * len(SERVICE_AREAS),
+                "Wind Speed": [5] * len(SERVICE_AREAS),
+            }
+        )
 
     try:
-        payload = load_grand_rapids_weather()
-    except requests.RequestException as exc:
-        st.error("The API request failed.")
-        st.exception(exc)
-        return
+        alerts = load_nws_alerts()
+        connected_sources += int(not alerts.empty)
+    except Exception as exc:
+        api_errors.append(f"National Weather Service failed: {exc}")
+        alerts = pd.DataFrame(columns=["City", "Active Alerts", "Alert Types"])
 
-    current = payload.get("current", {})
-    units = payload.get("current_units", {})
+    try:
+        air_quality = load_open_meteo_air_quality()
+        connected_sources += int(not air_quality.empty)
+    except Exception as exc:
+        api_errors.append(f"Open-Meteo Air Quality failed: {exc}")
+        air_quality = pd.DataFrame(columns=["City", "US AQI", "PM2.5"])
+
+    try:
+        market = load_datausa_market_data()
+        connected_sources += int(not market.empty)
+    except Exception as exc:
+        api_errors.append(f"Data USA market API failed: {exc}")
+        market = pd.DataFrame(
+            columns=["City", "Population", "Median Household Income", "Median Home Value"]
+        )
+
+    for error in api_errors:
+        st.warning(error)
+
+    analysis = build_external_api_analysis(weather, alerts, air_quality, market)
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        metric_card(
-            "Grand Rapids temperature",
-            f"{current.get('temperature_2m', 'N/A')} {units.get('temperature_2m', '')}",
-        )
+        metric_card("Connected API sources", f"{connected_sources}/4")
     with col2:
-        metric_card(
-            "Precipitation",
-            f"{current.get('precipitation', 'N/A')} {units.get('precipitation', '')}",
-        )
+        metric_card("Avg install risk", percent(float(analysis["Install Risk Score"].mean())))
     with col3:
-        metric_card(
-            "Wind speed",
-            f"{current.get('wind_speed_10m', 'N/A')} {units.get('wind_speed_10m', '')}",
-        )
+        metric_card("Best market", str(analysis.iloc[0]["City"]))
     with col4:
-        metric_card("API status", "Connected")
+        metric_card("Active weather alerts", f"{int(analysis['Active Alerts'].fillna(0).sum())}")
 
-    st.write("Source: Open-Meteo public API, no API key required.")
+    weather_col, market_col = st.columns(2)
+    with weather_col:
+        fig = px.bar(
+            analysis.sort_values("Install Risk Score", ascending=False),
+            x="City",
+            y="Install Risk Score",
+            color="City",
+            title="Operational install risk from weather APIs",
+            hover_data=["Temperature", "Precipitation", "Wind Speed", "Alert Types"],
+            color_discrete_map=CITY_COLORS,
+        )
+        chart_theme(fig, 380)
+        st.plotly_chart(fig, width="stretch")
+    with market_col:
+        fig = px.bar(
+            analysis,
+            x="City",
+            y="Market Opportunity Score",
+            color="City",
+            title="Market opportunity score from Data USA + external signals",
+            hover_data=[
+                "Population",
+                "Median Household Income",
+                "Median Home Value",
+                "Operations Readiness Score",
+                "Suggested Action",
+            ],
+            color_discrete_map=CITY_COLORS,
+        )
+        chart_theme(fig, 380)
+        st.plotly_chart(fig, width="stretch")
+
+    demo_col, alert_col = st.columns(2)
+    with demo_col:
+        fig = px.scatter(
+            analysis,
+            x="Median Household Income",
+            y="Median Home Value",
+            size="Population",
+            color="City",
+            title="Housing and income context by service area",
+            color_discrete_map=CITY_COLORS,
+        )
+        chart_theme(fig, 360)
+        st.plotly_chart(fig, width="stretch")
+    with alert_col:
+        air = analysis.melt(
+            id_vars="City",
+            value_vars=["US AQI", "PM2.5"],
+            var_name="Air Metric",
+            value_name="Value",
+        )
+        fig = px.bar(
+            air,
+            x="City",
+            y="Value",
+            color="Air Metric",
+            barmode="group",
+            title="Air quality from Open-Meteo",
+            color_discrete_map={"US AQI": "#8B5CF6", "PM2.5": "#F59E0B"},
+        )
+        chart_theme(fig, 360)
+        st.plotly_chart(fig, width="stretch")
+
+    alert_col, action_col = st.columns(2)
+    with alert_col:
+        fig = px.bar(
+            analysis,
+            x="City",
+            y="Active Alerts",
+            color="City",
+            title="Active National Weather Service alerts",
+            color_discrete_map=CITY_COLORS,
+        )
+        chart_theme(fig, 360)
+        st.plotly_chart(fig, width="stretch")
+    with action_col:
+        fig = px.bar(
+            analysis.sort_values("Operations Readiness Score", ascending=False),
+            x="City",
+            y="Operations Readiness Score",
+            color="City",
+            title="Operations readiness score",
+            hover_data=["Install Risk Score", "Alert Risk", "Air Quality Risk"],
+            color_discrete_map=CITY_COLORS,
+        )
+        chart_theme(fig, 360)
+        st.plotly_chart(fig, width="stretch")
+
+    st.markdown("#### How these external statistics can be used")
+    st.write(
+        "Weather signals can protect installation schedules, Data USA market data can prioritize "
+        "higher-opportunity service areas, National Weather Service alerts can flag routing risk, "
+        "and air quality can help operations decide when outdoor prep or crew exposure needs attention."
+    )
     st.dataframe(
-        pd.DataFrame(
+        analysis[
             [
-                {
-                    "API": "Open-Meteo Forecast",
-                    "Location": "Grand Rapids, MI",
-                    "Fetched Time": current.get("time", "N/A"),
-                    "Latitude": payload.get("latitude"),
-                    "Longitude": payload.get("longitude"),
-                }
+                "City",
+                "Temperature",
+                "Precipitation",
+                "Wind Speed",
+                "Active Alerts",
+                "US AQI",
+                "PM2.5",
+                "Population",
+                "Median Household Income",
+                "Median Home Value",
+                "Install Risk Score",
+                "Operations Readiness Score",
+                "Market Opportunity Score",
+                "Suggested Action",
             ]
+        ].style.format(
+            {
+                "Temperature": "{:.1f}",
+                "Precipitation": "{:.2f}",
+                "Wind Speed": "{:.1f}",
+                "US AQI": "{:.0f}",
+                "PM2.5": "{:.1f}",
+                "Population": "{:,.0f}",
+                "Median Household Income": "${:,.0f}",
+                "Median Home Value": "${:,.0f}",
+                "Install Risk Score": "{:.1f}",
+                "Operations Readiness Score": "{:.1f}",
+                "Market Opportunity Score": "{:.1f}",
+            },
+            na_rep="N/A",
         ),
         width="stretch",
         hide_index=True,
@@ -1448,7 +1861,7 @@ def main() -> None:
         "Sales Performance",
         "Marketing Performance",
         "Gross Revenue",
-        "API Test",
+        "External API Insights",
         "Zoho Sales",
         "Zoho Leads",
     ]
@@ -1489,8 +1902,8 @@ def main() -> None:
         render_marketing_performance(marketing_data)
     elif selected_dashboard == "Gross Revenue":
         render_gross_revenue(revenue_monthly, revenue_segments)
-    elif selected_dashboard == "API Test":
-        render_api_test()
+    elif selected_dashboard == "External API Insights":
+        render_external_api_insights()
     elif selected_dashboard == "Zoho Sales":
         render_deals(deals)
     elif selected_dashboard == "Zoho Leads":
