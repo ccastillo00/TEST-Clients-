@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from html import escape
 from typing import Any
 
 import pandas as pd
@@ -395,6 +396,60 @@ def load_datausa_market_data() -> pd.DataFrame:
             "Median Home Value",
         ]
     ].sort_values("City")
+
+
+def fallback_weather_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "City": list(SERVICE_AREAS),
+            "Temperature": [65] * len(SERVICE_AREAS),
+            "Precipitation": [0] * len(SERVICE_AREAS),
+            "Wind Speed": [5] * len(SERVICE_AREAS),
+        }
+    )
+
+
+def load_external_api_context() -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    list[str],
+    int,
+]:
+    api_errors = []
+    connected_sources = 0
+    try:
+        weather = load_open_meteo_weather()
+        connected_sources += int(not weather.empty)
+    except Exception as exc:
+        api_errors.append(f"Open-Meteo failed: {exc}")
+        weather = fallback_weather_frame()
+
+    try:
+        alerts = load_nws_alerts()
+        connected_sources += int(not alerts.empty)
+    except Exception as exc:
+        api_errors.append(f"National Weather Service failed: {exc}")
+        alerts = pd.DataFrame(columns=["City", "Active Alerts", "Alert Types"])
+
+    try:
+        air_quality = load_open_meteo_air_quality()
+        connected_sources += int(not air_quality.empty)
+    except Exception as exc:
+        api_errors.append(f"Open-Meteo Air Quality failed: {exc}")
+        air_quality = pd.DataFrame(columns=["City", "US AQI", "PM2.5"])
+
+    try:
+        market = load_datausa_market_data()
+        connected_sources += int(not market.empty)
+    except Exception as exc:
+        api_errors.append(f"Data USA market API failed: {exc}")
+        market = pd.DataFrame(
+            columns=["City", "Population", "Median Household Income", "Median Home Value"]
+        )
+
+    return weather, alerts, air_quality, market, api_errors, connected_sources
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -1651,50 +1706,288 @@ def build_external_api_analysis(
     return analysis.sort_values("Market Opportunity Score", ascending=False)
 
 
+def add_notification(
+    notifications: list[dict[str, str]],
+    severity: str,
+    title: str,
+    message: str,
+    source: str,
+) -> None:
+    notifications.append(
+        {
+            "Severity": severity,
+            "Title": title,
+            "Message": message,
+            "Source": source,
+        }
+    )
+
+
+def build_dashboard_notifications(
+    deals: pd.DataFrame,
+    leads: pd.DataFrame,
+    call_center: pd.DataFrame,
+    revenue_monthly: pd.DataFrame,
+    external_analysis: pd.DataFrame,
+    api_errors: list[str],
+) -> list[dict[str, str]]:
+    notifications: list[dict[str, str]] = []
+
+    for _, row in external_analysis.iterrows():
+        city = str(row.get("City", "Unknown market"))
+        install_risk = safe_float(row.get("Install Risk Score"))
+        active_alerts = safe_float(row.get("Active Alerts"))
+        aqi = safe_float(row.get("US AQI"), 50)
+        readiness = safe_float(row.get("Operations Readiness Score"), 100)
+        alert_types = str(row.get("Alert Types") or "weather alerts")
+
+        if active_alerts >= 1:
+            add_notification(
+                notifications,
+                "High" if active_alerts >= 2 else "Medium",
+                f"{city}: official weather alert active",
+                f"{int(active_alerts)} active alert(s): {alert_types}. Review same-day routing and installer start times.",
+                "National Weather Service",
+            )
+
+        if install_risk >= 20:
+            add_notification(
+                notifications,
+                "High" if install_risk >= 40 else "Medium",
+                f"{city}: installation weather risk",
+                f"Install risk is {install_risk:.1f}/100 based on precipitation, wind, and temperature.",
+                "Open-Meteo Forecast",
+            )
+
+        if aqi >= 70:
+            add_notification(
+                notifications,
+                "High" if aqi >= 100 else "Medium",
+                f"{city}: air quality watch",
+                f"Current AQI is {aqi:.0f}. Consider crew exposure, outdoor prep, and customer communication.",
+                "Open-Meteo Air Quality",
+            )
+
+        if readiness < 70:
+            add_notification(
+                notifications,
+                "Medium",
+                f"{city}: operations readiness below target",
+                f"Readiness is {readiness:.1f}/100 after weather, alerts, and air quality signals.",
+                "External API Score",
+            )
+
+    staffing = build_call_center_staffing_model(call_center)
+    staffing_gap = staffing[staffing["Agent_Gap"] > 0].sort_values("Agent_Gap", ascending=False)
+    if not staffing_gap.empty:
+        total_gap = int(staffing_gap["Agent_Gap"].sum())
+        top_markets = ", ".join(
+            f"{row.City} (+{int(row.Agent_Gap)})" for row in staffing_gap.head(3).itertuples()
+        )
+        add_notification(
+            notifications,
+            "High" if total_gap >= 4 else "Medium",
+            "Appointment center staffing gap",
+            f"{total_gap} additional agent(s) are recommended for the +80% growth target. Biggest gaps: {top_markets}.",
+            "Workforce Model",
+        )
+
+    _, generated_to_date, year_end_target = build_seasonal_growth_plan(revenue_monthly)
+    revenue_gap = max(0, year_end_target - generated_to_date)
+    progress = generated_to_date / year_end_target * 100 if year_end_target else 0
+    if revenue_gap > 0:
+        add_notification(
+            notifications,
+            "High" if progress < 50 else "Medium",
+            "Revenue gap to year-end growth target",
+            f"{money(revenue_gap)} remains to reach the +80% target. Current progress is {progress:.1f}%.",
+            "Growth Plan",
+        )
+
+    pipeline = float(deals.get("Amount", pd.Series(dtype=float)).sum())
+    target_pipeline = pipeline * (1 + COMPANY_GROWTH_TARGET)
+    if pipeline > 0:
+        add_notification(
+            notifications,
+            "Info",
+            "Pipeline target check",
+            f"Current pipeline is {money(pipeline)}. A +80% scenario points to {money(target_pipeline)}.",
+            "Zoho Pipeline",
+        )
+
+    current_leads = len(leads)
+    target_leads = math.ceil(current_leads * (1 + COMPANY_GROWTH_TARGET))
+    if current_leads:
+        add_notification(
+            notifications,
+            "Info",
+            "Lead volume target check",
+            f"{target_leads - current_leads:,} additional leads are needed to model an +80% lead-growth scenario.",
+            "Zoho Leads",
+        )
+
+    if api_errors:
+        add_notification(
+            notifications,
+            "Info",
+            "External API availability",
+            "Some public API signals are unavailable right now, so fallback values are being used where needed.",
+            "API Monitor",
+        )
+
+    severity_rank = {"High": 0, "Medium": 1, "Info": 2}
+    return sorted(notifications, key=lambda item: severity_rank.get(item["Severity"], 3))
+
+
+def render_notification_card(notification: dict[str, str]) -> None:
+    severity = notification["Severity"]
+    colors = {
+        "High": ("#DC2626", "rgba(220,38,38,.13)"),
+        "Medium": ("#F59E0B", "rgba(245,158,11,.16)"),
+        "Info": ("#2563EB", "rgba(37,99,235,.13)"),
+    }
+    accent, background = colors.get(severity, colors["Info"])
+    st.markdown(
+        f"""
+        <div class="notification-card" style="border-left-color:{accent};background:{background};">
+            <div class="notification-topline">
+                <span class="notification-badge" style="background:{accent};">{escape(severity)}</span>
+                <span class="notification-source">{escape(notification['Source'])}</span>
+            </div>
+            <div class="notification-title">{escape(notification['Title'])}</div>
+            <div class="notification-message">{escape(notification['Message'])}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_notification_center(
+    deals: pd.DataFrame,
+    leads: pd.DataFrame,
+    call_center: pd.DataFrame,
+    revenue_monthly: pd.DataFrame,
+) -> None:
+    weather, alerts, air_quality, market, api_errors, connected_sources = load_external_api_context()
+    external_analysis = build_external_api_analysis(weather, alerts, air_quality, market)
+    notifications = build_dashboard_notifications(
+        deals,
+        leads,
+        call_center,
+        revenue_monthly,
+        external_analysis,
+        api_errors,
+    )
+    weather_notifications = [
+        item
+        for item in notifications
+        if item["Source"] in {"Open-Meteo Forecast", "National Weather Service", "Open-Meteo Air Quality"}
+    ]
+    high_priority = [item for item in notifications if item["Severity"] == "High"]
+
+    st.markdown(
+        """
+        <style>
+        .notification-wrap {
+            border: 1px solid rgba(148, 163, 184, .28);
+            border-radius: 12px;
+            padding: 16px 16px 8px 16px;
+            margin: 16px 0 22px 0;
+            background: rgba(148, 163, 184, .06);
+        }
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .notification-heading {
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+        .notification-summary {
+            opacity: .76;
+            font-size: .88rem;
+        }
+        .notification-card {
+            border-left: 5px solid;
+            border-radius: 9px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+        }
+        .notification-topline {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .notification-badge {
+            color: #fff;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: .72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .notification-source {
+            font-size: .78rem;
+            font-weight: 700;
+            opacity: .72;
+        }
+        .notification-title {
+            font-weight: 800;
+            margin-bottom: 2px;
+        }
+        .notification-message {
+            opacity: .84;
+            line-height: 1.35;
+            font-size: .92rem;
+        }
+        @media (prefers-color-scheme: light) {
+            .notification-wrap {
+                background: #ffffff;
+                border-color: rgba(15, 23, 42, .12);
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="notification-wrap">
+            <div class="notification-header">
+                <div>
+                    <div class="notification-heading">Notification Center</div>
+                    <div class="notification-summary">
+                        Installation risk, weather alerts, staffing, and growth blockers.
+                    </div>
+                </div>
+                <div class="notification-summary">
+                    {len(high_priority)} high priority · {len(weather_notifications)} weather/air signals · {connected_sources}/4 APIs
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not notifications:
+        st.success("No active operational notifications right now.")
+        return
+
+    for notification in notifications[:6]:
+        render_notification_card(notification)
+
+
 def render_external_api_insights() -> None:
     st.subheader("External API insights")
     st.caption(
         "Open APIs can enrich the dashboard with market, weather, air quality, and operational context from outside Zoho."
     )
 
-    api_errors = []
-    connected_sources = 0
-    try:
-        weather = load_open_meteo_weather()
-        connected_sources += int(not weather.empty)
-    except Exception as exc:
-        api_errors.append(f"Open-Meteo failed: {exc}")
-        weather = pd.DataFrame(
-            {
-                "City": list(SERVICE_AREAS),
-                "Temperature": [65] * len(SERVICE_AREAS),
-                "Precipitation": [0] * len(SERVICE_AREAS),
-                "Wind Speed": [5] * len(SERVICE_AREAS),
-            }
-        )
-
-    try:
-        alerts = load_nws_alerts()
-        connected_sources += int(not alerts.empty)
-    except Exception as exc:
-        api_errors.append(f"National Weather Service failed: {exc}")
-        alerts = pd.DataFrame(columns=["City", "Active Alerts", "Alert Types"])
-
-    try:
-        air_quality = load_open_meteo_air_quality()
-        connected_sources += int(not air_quality.empty)
-    except Exception as exc:
-        api_errors.append(f"Open-Meteo Air Quality failed: {exc}")
-        air_quality = pd.DataFrame(columns=["City", "US AQI", "PM2.5"])
-
-    try:
-        market = load_datausa_market_data()
-        connected_sources += int(not market.empty)
-    except Exception as exc:
-        api_errors.append(f"Data USA market API failed: {exc}")
-        market = pd.DataFrame(
-            columns=["City", "Population", "Median Household Income", "Median Home Value"]
-        )
+    weather, alerts, air_quality, market, api_errors, connected_sources = load_external_api_context()
 
     for error in api_errors:
         st.warning(error)
@@ -1889,6 +2182,8 @@ def main() -> None:
     marketing_data = demo_marketing_performance()
     revenue_monthly = demo_gross_revenue_monthly()
     revenue_segments = demo_gross_revenue_segments()
+
+    render_notification_center(deals, leads, call_center_data, revenue_monthly)
 
     if selected_dashboard == "Main Growth Dashboard":
         render_growth_dashboard(deals, leads, call_center_data, revenue_monthly)
