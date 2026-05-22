@@ -23,7 +23,7 @@ from zoho_client import ZohoApiError, ZohoConfig, ZohoCRMClient
 
 
 st.set_page_config(
-    page_title="BathWorks MI Dashboard",
+    page_title="Performance Demo Dashboard",
     page_icon="📈",
     layout="wide",
 )
@@ -57,16 +57,12 @@ DIMENSION_LABELS = {
     "City": "Service Area",
     "Tenant": "Market / Location",
     "Industry": "Customer Segment",
-    "Product": "Remodel Product",
+    "Product": "Product Line",
 }
 LOGIN_USER = "camilo.cast"
 LOGIN_PASSWORD = "123456"
 DEMO_AUTH_TOKEN = "camilo-cast-demo"
 COMPANY_GROWTH_TARGET = 0.80
-BATHWORKS_LOGO_URL = (
-    "https://www.bathworksmi.com/_next/image?q=75&url=%2Fcdn--media%2F"
-    "jacuzzi_bathworks_logo_black_3x__1__oiyy6yi7cg9h3kzs0umcf9-924x164.png&w=1920"
-)
 CHART_COLORWAY = [
     "#1D4ED8",
     "#EF4444",
@@ -78,12 +74,12 @@ CHART_COLORWAY = [
     "#84CC16",
 ]
 CITY_COLORS = {
-    "Grand Rapids": "#1D4ED8",
-    "Holland": "#14B8A6",
-    "Muskegon": "#F97316",
-    "Kalamazoo": "#8B5CF6",
-    "Saginaw": "#EF4444",
-    "Traverse City": "#22C55E",
+    "Austin": "#1D4ED8",
+    "Denver": "#14B8A6",
+    "Phoenix": "#F97316",
+    "Charlotte": "#8B5CF6",
+    "Nashville": "#EF4444",
+    "Tampa": "#22C55E",
 }
 KPI_COLORS = {
     "Current": "#1D4ED8",
@@ -113,11 +109,11 @@ KPI_COLORS = {
     "SQL": "#22C55E",
 }
 PRODUCT_COLORS = {
-    "Jacuzzi Bathtub": "#1D4ED8",
-    "Walk-In Shower": "#14B8A6",
-    "Tub-to-Shower Conversion": "#F97316",
-    "Shower-to-Tub Conversion": "#8B5CF6",
-    "Senior Safety Remodel": "#EC4899",
+    "Analytics Platform": "#1D4ED8",
+    "CRM Suite": "#14B8A6",
+    "Support Automation": "#F97316",
+    "Scheduling Portal": "#8B5CF6",
+    "Field Ops App": "#EC4899",
 }
 RECRUITER_COLORS = {
     "Ana Torres": "#1D4ED8",
@@ -136,16 +132,16 @@ CHANNEL_COLORS = {
     "Paid Search": "#1D4ED8",
     "Social Ads": "#EC4899",
     "Email": "#F59E0B",
-    "Home Shows": "#10B981",
+    "Events": "#10B981",
     "Organic": "#22C55E",
     "Referrals": "#8B5CF6",
 }
 SEGMENT_COLORS = {
-    "Wet Area Remodel": "#1D4ED8",
-    "Aging-in-Place": "#8B5CF6",
-    "Jacuzzi Dealer": "#14B8A6",
-    "Homeowner Remodel": "#F97316",
-    "Veteran Accessibility": "#EC4899",
+    "Healthcare": "#1D4ED8",
+    "Retail": "#8B5CF6",
+    "Financial Services": "#14B8A6",
+    "Logistics": "#F97316",
+    "Energy": "#EC4899",
 }
 SEASONAL_MONTH_WEIGHTS = {
     "Jan": 0.055,
@@ -163,41 +159,41 @@ SEASONAL_MONTH_WEIGHTS = {
 }
 MONTH_ORDER = list(SEASONAL_MONTH_WEIGHTS)
 SERVICE_AREAS = {
-    "Grand Rapids": {
-        "latitude": 42.9634,
-        "longitude": -85.6681,
-        "census_name": "Grand Rapids city, Michigan",
-        "datausa_place_id": "16000US2634000",
+    "Austin": {
+        "latitude": 30.2672,
+        "longitude": -97.7431,
+        "census_name": "Austin city, Texas",
+        "datausa_place_id": "16000US4805000",
     },
-    "Holland": {
-        "latitude": 42.7875,
-        "longitude": -86.1089,
-        "census_name": "Holland city, Michigan",
-        "datausa_place_id": "16000US2638640",
+    "Denver": {
+        "latitude": 39.7392,
+        "longitude": -104.9903,
+        "census_name": "Denver city, Colorado",
+        "datausa_place_id": "16000US0820000",
     },
-    "Muskegon": {
-        "latitude": 43.2342,
-        "longitude": -86.2484,
-        "census_name": "Muskegon city, Michigan",
-        "datausa_place_id": "16000US2656320",
+    "Phoenix": {
+        "latitude": 33.4484,
+        "longitude": -112.0740,
+        "census_name": "Phoenix city, Arizona",
+        "datausa_place_id": "16000US0455000",
     },
-    "Kalamazoo": {
-        "latitude": 42.2917,
-        "longitude": -85.5872,
-        "census_name": "Kalamazoo city, Michigan",
-        "datausa_place_id": "16000US2642160",
+    "Charlotte": {
+        "latitude": 35.2271,
+        "longitude": -80.8431,
+        "census_name": "Charlotte city, North Carolina",
+        "datausa_place_id": "16000US3712000",
     },
-    "Saginaw": {
-        "latitude": 43.4195,
-        "longitude": -83.9508,
-        "census_name": "Saginaw city, Michigan",
-        "datausa_place_id": "16000US2670520",
+    "Nashville": {
+        "latitude": 36.1627,
+        "longitude": -86.7816,
+        "census_name": "Nashville-Davidson metropolitan government (balance), Tennessee",
+        "datausa_place_id": "16000US4752006",
     },
-    "Traverse City": {
-        "latitude": 44.7631,
-        "longitude": -85.6206,
-        "census_name": "Traverse City city, Michigan",
-        "datausa_place_id": "16000US2680340",
+    "Tampa": {
+        "latitude": 27.9506,
+        "longitude": -82.4572,
+        "census_name": "Tampa city, Florida",
+        "datausa_place_id": "16000US1271000",
     },
 }
 
@@ -270,7 +266,7 @@ def load_open_meteo_weather() -> pd.DataFrame:
 @st.cache_data(ttl=900, show_spinner=False)
 def load_nws_alerts() -> pd.DataFrame:
     rows = []
-    headers = {"User-Agent": "BathWorksMI-Dashboard/1.0"}
+    headers = {"User-Agent": "PerformanceDemo-Dashboard/1.0"}
     for city, meta in SERVICE_AREAS.items():
         response = requests.get(
             "https://api.weather.gov/alerts/active",
@@ -519,31 +515,6 @@ def color_map_for(column: str | None) -> dict[str, str] | None:
     return None
 
 
-def render_logo(width: int = 420) -> None:
-    st.markdown(
-        f"""
-        <div style="background:#ffffff;border-radius:10px;padding:14px 18px;
-                    display:inline-block;margin-bottom:18px;">
-            <img src="{BATHWORKS_LOGO_URL}" alt="BathWorks MI Logo"
-                 style="width:{width}px;max-width:100%;height:auto;display:block;" />
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_sidebar_logo() -> None:
-    st.sidebar.markdown(
-        f"""
-        <div style="background:#ffffff;border-radius:8px;padding:10px 12px;margin-bottom:18px;">
-            <img src="{BATHWORKS_LOGO_URL}" alt="BathWorks MI Logo"
-                 style="width:100%;height:auto;display:block;" />
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def query_param(name: str, default: str = "") -> str:
     value = st.query_params.get(name, default)
     if isinstance(value, list):
@@ -563,8 +534,7 @@ def authenticate_user() -> bool:
         st.session_state["username"] = LOGIN_USER
         return True
 
-    render_logo()
-    st.title("BathWorks MI Performance Dashboard")
+    st.title("Performance Demo Dashboard")
     st.caption("Sign in to review lead flow, appointments, sales, staffing, and revenue growth.")
     with st.form("login_form"):
         username = st.text_input("Username")
@@ -699,8 +669,7 @@ def render_sidebar(dashboard_options: list[str]) -> tuple[bool, str]:
     elif st.session_state.get("selected_dashboard") not in dashboard_options:
         st.session_state["selected_dashboard"] = dashboard_options[0]
 
-    render_sidebar_logo()
-    st.sidebar.title("BathWorks Dashboards")
+    st.sidebar.title("Demo Dashboards")
     st.sidebar.markdown(
         """
         <style>
@@ -899,10 +868,10 @@ def build_seasonal_growth_plan(revenue_monthly: pd.DataFrame) -> tuple[pd.DataFr
             "Jan": "Slow planning",
             "Feb": "Slow planning",
             "Mar": "Ramp up",
-            "Apr": "Peak remodel demand",
-            "May": "Peak remodel demand",
-            "Jun": "Peak remodel demand",
-            "Jul": "Peak remodel demand",
+            "Apr": "Peak demand",
+            "May": "Peak demand",
+            "Jun": "Peak demand",
+            "Jul": "Peak demand",
             "Aug": "High demand",
             "Sep": "High demand",
             "Oct": "Moderate demand",
@@ -927,7 +896,7 @@ def render_revenue_target_cards(generated_to_date: float, year_end_target: float
                 <div style="font-size:3.2rem;line-height:1.1;font-weight:900;margin-top:8px;">
                     {money(generated_to_date)}
                 </div>
-                <div style="margin-top:10px;opacity:.78;">Current BathWorks MI gross revenue in the demo period.</div>
+                <div style="margin-top:10px;opacity:.78;">Current demo gross revenue for the selected period.</div>
             </div>
             <div style="border:1px solid rgba(239,68,68,.38);border-radius:14px;padding:26px;
                         background:linear-gradient(135deg, rgba(239,68,68,.20), rgba(245,158,11,.14));">
@@ -953,8 +922,8 @@ def render_growth_dashboard(
     call_center: pd.DataFrame,
     revenue_monthly: pd.DataFrame,
 ) -> None:
-    st.subheader("BathWorks MI growth dashboard")
-    st.caption("Where BathWorks is today vs where it needs to be to reach 80% growth by year end.")
+    st.subheader("Main growth dashboard")
+    st.caption("Where the sample operation is today vs where it needs to be to reach 80% growth by year end.")
 
     staffing = build_call_center_staffing_model(call_center)
     seasonal_plan, gross_revenue, target_revenue = build_seasonal_growth_plan(revenue_monthly)
@@ -1129,7 +1098,7 @@ def render_growth_dashboard(
 
 
 def render_recruiter_performance(df: pd.DataFrame) -> None:
-    st.subheader("Recruiting and installer staffing")
+    st.subheader("Recruiting and field staffing")
     df = render_dimension_filters(df, "recruiting")
     if df.empty:
         st.info("No recruiting records match the current filters.")
@@ -1204,7 +1173,7 @@ def render_recruiter_performance(df: pd.DataFrame) -> None:
 
 def render_call_center_performance(df: pd.DataFrame) -> None:
     st.subheader("Lead and appointment center performance")
-    st.caption("BathWorks growth target: 80% expansion across service markets.")
+    st.caption("Demo growth target: 80% expansion across service markets.")
     df = render_dimension_filters(df, "call_center")
     if df.empty:
         st.info("No appointment center records match the current filters.")
@@ -1632,7 +1601,7 @@ def safe_float(value: Any, fallback: float = 0.0) -> float:
     return fallback if pd.isna(numeric) else float(numeric)
 
 
-def weather_install_risk(row: pd.Series) -> float:
+def weather_field_risk(row: pd.Series) -> float:
     precipitation = safe_float(row.get("Precipitation"))
     wind_speed = safe_float(row.get("Wind Speed"))
     temperature = safe_float(row.get("Temperature"), 65)
@@ -1668,7 +1637,7 @@ def build_external_api_analysis(
         if column not in analysis:
             analysis[column] = fallback
 
-    analysis["Install Risk Score"] = analysis.apply(weather_install_risk, axis=1)
+    analysis["Field Risk Score"] = analysis.apply(weather_field_risk, axis=1)
     analysis["Active Alerts"] = pd.to_numeric(analysis["Active Alerts"], errors="coerce").fillna(0)
     analysis["US AQI"] = pd.to_numeric(analysis["US AQI"], errors="coerce").fillna(50)
     analysis["PM2.5"] = pd.to_numeric(analysis["PM2.5"], errors="coerce").fillna(8)
@@ -1696,7 +1665,7 @@ def build_external_api_analysis(
     )
     analysis["Operations Readiness Score"] = (
         100
-        - analysis["Install Risk Score"]
+        - analysis["Field Risk Score"]
         - analysis["Alert Risk"]
         - analysis["Air Quality Risk"] * 0.35
     ).clip(lower=0, upper=100)
@@ -1745,7 +1714,7 @@ def build_dashboard_notifications(
 
     for _, row in external_analysis.iterrows():
         city = str(row.get("City", "Unknown market"))
-        install_risk = safe_float(row.get("Install Risk Score"))
+        field_risk = safe_float(row.get("Field Risk Score"))
         active_alerts = safe_float(row.get("Active Alerts"))
         aqi = safe_float(row.get("US AQI"), 50)
         readiness = safe_float(row.get("Operations Readiness Score"), 100)
@@ -1756,16 +1725,16 @@ def build_dashboard_notifications(
                 notifications,
                 "High" if active_alerts >= 2 else "Medium",
                 f"{city}: official weather alert active",
-                f"{int(active_alerts)} active alert(s): {alert_types}. Review same-day routing and installer start times.",
+                f"{int(active_alerts)} active alert(s): {alert_types}. Review same-day routing and field team start times.",
                 "National Weather Service",
             )
 
-        if install_risk >= 20:
+        if field_risk >= 20:
             add_notification(
                 notifications,
-                "High" if install_risk >= 40 else "Medium",
-                f"{city}: installation weather risk",
-                f"Install risk is {install_risk:.1f}/100 based on precipitation, wind, and temperature.",
+                "High" if field_risk >= 40 else "Medium",
+                f"{city}: field weather risk",
+                f"Field risk is {field_risk:.1f}/100 based on precipitation, wind, and temperature.",
                 "Open-Meteo Forecast",
             )
 
@@ -2048,7 +2017,7 @@ def render_external_api_insights() -> None:
     with col1:
         metric_card("Connected API sources", f"{connected_sources}/4")
     with col2:
-        metric_card("Avg install risk", percent(float(analysis["Install Risk Score"].mean())))
+        metric_card("Avg field risk", percent(float(analysis["Field Risk Score"].mean())))
     with col3:
         metric_card("Best market", str(analysis.iloc[0]["City"]))
     with col4:
@@ -2057,11 +2026,11 @@ def render_external_api_insights() -> None:
     weather_col, market_col = st.columns(2)
     with weather_col:
         fig = px.bar(
-            analysis.sort_values("Install Risk Score", ascending=False),
+            analysis.sort_values("Field Risk Score", ascending=False),
             x="City",
-            y="Install Risk Score",
+            y="Field Risk Score",
             color="City",
-            title="Operational install risk from weather APIs",
+            title="Operational field risk from weather APIs",
             hover_data=["Temperature", "Precipitation", "Wind Speed", "Alert Types"],
             color_discrete_map=CITY_COLORS,
         )
@@ -2137,7 +2106,7 @@ def render_external_api_insights() -> None:
             y="Operations Readiness Score",
             color="City",
             title="Operations readiness score",
-            hover_data=["Install Risk Score", "Alert Risk", "Air Quality Risk"],
+            hover_data=["Field Risk Score", "Alert Risk", "Air Quality Risk"],
             color_discrete_map=CITY_COLORS,
         )
         chart_theme(fig, 360)
@@ -2145,7 +2114,7 @@ def render_external_api_insights() -> None:
 
     st.markdown("#### How these external statistics can be used")
     st.write(
-        "Weather signals can protect installation schedules, Data USA market data can prioritize "
+        "Weather signals can protect field schedules, Data USA market data can prioritize "
         "higher-opportunity service areas, National Weather Service alerts can flag routing risk, "
         "and air quality can help operations decide when outdoor prep or crew exposure needs attention."
     )
@@ -2162,7 +2131,7 @@ def render_external_api_insights() -> None:
                 "Population",
                 "Median Household Income",
                 "Median Home Value",
-                "Install Risk Score",
+                "Field Risk Score",
                 "Operations Readiness Score",
                 "Market Opportunity Score",
                 "Suggested Action",
@@ -2177,7 +2146,7 @@ def render_external_api_insights() -> None:
                 "Population": "{:,.0f}",
                 "Median Household Income": "${:,.0f}",
                 "Median Home Value": "${:,.0f}",
-                "Install Risk Score": "{:.1f}",
+                "Field Risk Score": "{:.1f}",
                 "Operations Readiness Score": "{:.1f}",
                 "Market Opportunity Score": "{:.1f}",
             },
@@ -2192,9 +2161,9 @@ def main() -> None:
     if not authenticate_user():
         return
 
-    st.title("BathWorks MI Performance Dashboard")
+    st.title("Performance Demo Dashboard")
     st.caption(
-        "Executive view of lead flow, appointments, sales, installer staffing, and revenue growth."
+        "Executive view of lead flow, appointments, sales, field staffing, and revenue growth."
     )
 
     dashboard_options = [

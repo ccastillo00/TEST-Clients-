@@ -1,6 +1,6 @@
-# BathWorks MI Dashboard with Streamlit and Zoho CRM
+# Performance Demo Dashboard with Streamlit and Zoho CRM
 
-BathWorks MI-focused Streamlit application for reviewing lead flow,
+Generic Streamlit demo application for reviewing lead flow,
 appointments, sales, staffing, service markets, and revenue growth.
 
 It includes:
@@ -8,23 +8,23 @@ It includes:
 - Basic login for the demo: `camilo.cast` / `123456`.
 - OAuth connection using a Zoho `refresh_token`.
 - Zoho CRM API v8 module reads.
-- BathWorks growth dashboard showing where the company is today and where it needs
+- Main growth dashboard showing where the sample operation is today and where it needs
   to be by year end to hit 80% growth.
-- Seasonal growth plan that weights stronger remodeling months more heavily
+- Seasonal growth plan that weights stronger demand months more heavily
   instead of spreading the 80% target evenly across the year.
-- Branded chart colors by service area, KPI, remodel product, marketing channel,
+- Chart colors by service area, KPI, product line, marketing channel,
   and team member.
-- Sidebar navigation under BathWorks Dashboards, with Settings below it.
-- Demo dashboards for recruiting and installer staffing, appointment center performance, sales
+- Sidebar navigation under Demo Dashboards, with Settings below it.
+- Demo dashboards for recruiting and field staffing, appointment center performance, sales
   performance, marketing performance, and gross revenue.
 - Appointment center staffing model with agents by service area, normalized KPIs, a simple
   regression, and an 80% company growth target scenario.
-- Cross-dimensional demo data by West Michigan service area, market/location,
-  customer segment, and remodel product.
+- Cross-dimensional demo data by sample service area, market/location,
+  customer segment, and product line.
 - Gross revenue subtabs for overview, revenue mix, segments, and detail.
 - External API Insights dashboard combining open APIs for weather, official weather
   alerts, air quality, and public market demographics.
-- Global notification dropdown for installation risk, weather alerts, staffing gaps,
+- Global notification dropdown for field risk, weather alerts, staffing gaps,
   API availability, and growth target blockers.
 - Demo mode so the app can be reviewed before Zoho credentials are available.
 
@@ -88,8 +88,8 @@ The External API Insights dashboard uses public APIs that do not require secrets
 - Open-Meteo air quality API for AQI and PM2.5.
 - Data USA Tesseract API for ACS population, household income, and home value.
 
-These signals are combined into simple demo scores for install risk, operations
-readiness, and market opportunity by BathWorks service area.
+These signals are combined into simple demo scores for field risk, operations
+readiness, and market opportunity by sample service area.
 
 ## Official references
 

@@ -5,26 +5,26 @@ from datetime import date, timedelta
 import pandas as pd
 
 
-CITIES = ["Grand Rapids", "Holland", "Muskegon", "Kalamazoo", "Saginaw", "Traverse City"]
+CITIES = ["Austin", "Denver", "Phoenix", "Charlotte", "Nashville", "Tampa"]
 TENANTS = [
-    "Byron Center Showroom",
-    "Grand Rapids Metro",
-    "Northern Michigan",
-    "Tri-Cities Market",
+    "Central Region",
+    "Mountain Region",
+    "Southwest Region",
+    "Southeast Region",
 ]
 INDUSTRIES = [
-    "Wet Area Remodel",
-    "Aging-in-Place",
-    "Jacuzzi Dealer",
-    "Homeowner Remodel",
-    "Veteran Accessibility",
+    "Healthcare",
+    "Retail",
+    "Financial Services",
+    "Logistics",
+    "Energy",
 ]
 PRODUCTS = [
-    "Jacuzzi Bathtub",
-    "Walk-In Shower",
-    "Tub-to-Shower Conversion",
-    "Shower-to-Tub Conversion",
-    "Senior Safety Remodel",
+    "Analytics Platform",
+    "CRM Suite",
+    "Support Automation",
+    "Scheduling Portal",
+    "Field Ops App",
 ]
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
 
@@ -56,7 +56,7 @@ def demo_deals() -> pd.DataFrame:
         rows.append(
             {
                 **_dimension(index),
-                "Deal_Name": f"{PRODUCTS[index % len(PRODUCTS)]} project {index + 1}",
+                "Deal_Name": f"{PRODUCTS[index % len(PRODUCTS)]} rollout {index + 1}",
                 "Stage": stages[index % len(stages)],
                 "Amount": 8500 + (index * 4300) + ((index % 4) * 2200),
                 "Closing_Date": today + timedelta(days=(index * 5) - 30),
@@ -75,9 +75,9 @@ def demo_leads() -> pd.DataFrame:
         rows.append(
             {
                 **_dimension(index),
-                "Company": f"{CITIES[index % len(CITIES)]} homeowner {index + 1}",
+                "Company": f"{CITIES[index % len(CITIES)]} account {index + 1}",
                 "Lead_Status": statuses[index % len(statuses)],
-                "Lead_Source": ["Website Form", "Phone Call", "Showroom", "Event", "Referral"][index % 5],
+                "Lead_Source": ["Website Form", "Phone Call", "Partner", "Event", "Referral"][index % 5],
                 "Created_Time": today - timedelta(days=index * 2),
                 "Owner": ["Camilo", "Laura", "Daniela", "Sofia"][index % 4],
             }
@@ -88,11 +88,11 @@ def demo_leads() -> pd.DataFrame:
 def demo_recruiter_performance() -> pd.DataFrame:
     recruiters = ["Ana Torres", "Miguel Rios", "Valeria Gomez", "Santiago Mora", "Nina Patel"]
     roles = [
-        "In-House Installer",
-        "Design Consultant",
+        "Field Specialist",
+        "Sales Consultant",
         "Appointment Setter",
         "Project Coordinator",
-        "Service Technician",
+        "Support Specialist",
     ]
     rows = []
     for index in range(30):
@@ -118,7 +118,7 @@ def demo_recruiter_performance() -> pd.DataFrame:
 
 
 def demo_call_center_performance() -> pd.DataFrame:
-    teams = ["Inbound Leads", "Outbound Follow-Up", "Showroom", "Install Support", "Warranty Care"]
+    teams = ["Inbound Leads", "Outbound Follow-Up", "Customer Success", "Field Support", "Retention"]
     rows = []
     for index in range(30):
         calls = 720 + (index * 137) % 1650
@@ -166,7 +166,7 @@ def demo_sales_performance() -> pd.DataFrame:
 
 
 def demo_marketing_performance() -> pd.DataFrame:
-    channels = ["Paid Search", "Social Ads", "Email", "Home Shows", "Organic", "Referrals"]
+    channels = ["Paid Search", "Social Ads", "Email", "Events", "Organic", "Referrals"]
     rows = []
     for index in range(36):
         spend = 3200 + (index * 1450) % 26000
@@ -211,14 +211,14 @@ def demo_gross_revenue_monthly() -> pd.DataFrame:
 
 
 def demo_gross_revenue_segments() -> pd.DataFrame:
-    segments = ["Bathtubs", "Showers", "Conversions", "Senior Safety"]
+    segments = ["Platform", "Services", "Automation", "Support"]
     rows = []
     for index, industry in enumerate(INDUSTRIES * 2):
         rows.append(
             {
                 **_dimension(index),
                 "Segment": segments[index % len(segments)],
-                "Region": ["West Michigan", "Northern Michigan", "Tri-Cities"][index % 3],
+                "Region": ["Central", "West", "Southeast"][index % 3],
                 "Revenue": 165000 + (index * 59000) % 620000,
                 "Margin": 34 + index % 20,
             }
